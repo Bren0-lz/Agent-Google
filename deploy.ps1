@@ -1,0 +1,179 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+    Deploys the Invoice Sentinel agent to Google Cloud Run.
+
+.DESCRIPTION
+    Single source of truth for deploying this project. Also serves as the
+    spin-up instruction for the hackathon submission: clone the repo, run
+    `gcloud auth login`, then run this script.
+
+    Region rule (do not "fix" this):
+      * Infrastructure (Cloud Run, Firestore, GCS, Pub/Sub) lives in us-central1.
+      * Gemini API calls use the `global` endpoint, because the latest Gemini 3.x
+        models are only served there. GOOGLE_CLOUD_LOCATION=global is deliberate.
+
+    Environment variables are set explicitly here because `adk deploy cloud_run`
+    does NOT ship the local .env into the container. They are written to a
+    temporary YAML file and passed via --env-vars-file instead of
+    --set-env-vars, because PowerShell mangles comma-separated flag values into
+    a single giant value of the first variable.
+
+.EXAMPLE
+    .\deploy.ps1
+    Deploys with the defaults below.
+
+.EXAMPLE
+    .\deploy.ps1 -EnableApis
+    First-time setup on a fresh project: enables required APIs, then deploys.
+
+.EXAMPLE
+    .\deploy.ps1 -NoUi
+    Deploys the ADK API server only, without the developer web UI.
+#>
+[CmdletBinding()]
+param(
+    [string] $ProjectId   = 'agent-hackton',
+    [string] $Region      = 'us-central1',
+    [string] $ServiceName = 'invoice-sentinel',
+    [string] $AgentDir    = 'invoice_sentinel',
+
+    # Gemini endpoint. Must stay 'global' for Gemini 3.x. See region rule above.
+    [string] $ModelLocation = 'global',
+
+    # Deploy the ADK API server only (no developer web UI).
+    [switch] $NoUi,
+
+    # One-time: enable the Google Cloud APIs this project depends on.
+    [switch] $EnableApis
+)
+
+$ErrorActionPreference = 'Stop'
+$RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+Set-Location $RepoRoot
+
+function Write-Step($Message) {
+    Write-Host ''
+    Write-Host "==> $Message" -ForegroundColor Cyan
+}
+
+# --- Preflight ---------------------------------------------------------------
+
+Write-Step 'Checking prerequisites'
+
+if (-not (Get-Command gcloud -ErrorAction SilentlyContinue)) {
+    throw 'gcloud CLI not found on PATH. Install the Google Cloud SDK and run `gcloud auth login`.'
+}
+
+# Prefer the venv-local adk so the deployed adk_version matches the dev environment.
+$VenvAdk = Join-Path $RepoRoot '.venv\Scripts\adk.exe'
+if (Test-Path $VenvAdk) {
+    $Adk = $VenvAdk
+} elseif (Get-Command adk -ErrorAction SilentlyContinue) {
+    $Adk = 'adk'
+} else {
+    throw 'adk CLI not found. Create the venv and run: pip install google-adk'
+}
+
+$AgentPath = Join-Path $RepoRoot $AgentDir
+if (-not (Test-Path (Join-Path $AgentPath 'agent.py'))) {
+    throw "Agent source not found at $AgentPath (expected agent.py)."
+}
+
+Write-Host "    gcloud  : $((Get-Command gcloud).Source)"
+Write-Host "    adk     : $Adk ($(& $Adk --version))"
+Write-Host "    project : $ProjectId"
+Write-Host "    region  : $Region (Gemini endpoint: $ModelLocation)"
+Write-Host "    service : $ServiceName"
+
+gcloud config set project $ProjectId --quiet
+if ($LASTEXITCODE -ne 0) { throw "Failed to select project '$ProjectId'. Are you authenticated?" }
+
+# --- Optional one-time API enablement ---------------------------------------
+
+if ($EnableApis) {
+    Write-Step 'Enabling required Google Cloud APIs (one-time, slow)'
+    $Apis = @(
+        'aiplatform.googleapis.com'
+        'run.googleapis.com'
+        'firestore.googleapis.com'
+        'pubsub.googleapis.com'
+        'storage.googleapis.com'
+        'secretmanager.googleapis.com'
+        'cloudbuild.googleapis.com'
+        'artifactregistry.googleapis.com'
+    )
+    foreach ($Api in $Apis) {
+        Write-Host "    enabling $Api"
+        gcloud services enable $Api --project $ProjectId --quiet
+        if ($LASTEXITCODE -ne 0) { throw "Failed to enable $Api" }
+    }
+}
+
+# --- Runtime environment -----------------------------------------------------
+# The three variables the container cannot start correctly without.
+
+$RuntimeEnv = [ordered]@{
+    GOOGLE_GENAI_USE_VERTEXAI = 'TRUE'
+    GOOGLE_CLOUD_PROJECT      = $ProjectId
+    GOOGLE_CLOUD_LOCATION     = $ModelLocation
+}
+
+$EnvFile = Join-Path ([System.IO.Path]::GetTempPath()) "invoice-sentinel-env-$(Get-Date -Format 'yyyyMMddHHmmss').yaml"
+$EnvYaml = ($RuntimeEnv.GetEnumerator() | ForEach-Object { "$($_.Key): `"$($_.Value)`"" }) -join "`n"
+Set-Content -Path $EnvFile -Value $EnvYaml -Encoding utf8
+
+Write-Step 'Runtime environment to be set on the service'
+$RuntimeEnv.GetEnumerator() | ForEach-Object { Write-Host "    $($_.Key)=$($_.Value)" }
+
+# --- Deploy ------------------------------------------------------------------
+
+Write-Step "Deploying '$ServiceName' to Cloud Run"
+
+# Everything after `--` is forwarded verbatim to `gcloud run deploy`.
+$AdkArgs = @(
+    'deploy', 'cloud_run'
+    "--project=$ProjectId"
+    "--region=$Region"
+    "--service_name=$ServiceName"   # without this, ADK creates 'adk-default-service-name'
+    '--trace_to_cloud'
+)
+if (-not $NoUi) { $AdkArgs += '--with_ui' }
+$AdkArgs += @(
+    $AgentPath
+    '--'
+    "--env-vars-file=$EnvFile"
+    '--allow-unauthenticated'
+)
+
+try {
+    & $Adk @AdkArgs
+    if ($LASTEXITCODE -ne 0) { throw "adk deploy failed with exit code $LASTEXITCODE." }
+} finally {
+    Remove-Item $EnvFile -ErrorAction SilentlyContinue
+}
+
+# --- Verify ------------------------------------------------------------------
+
+Write-Step 'Verifying deployed service'
+
+$ServiceUrl = gcloud run services describe $ServiceName `
+    --project $ProjectId --region $Region --format 'value(status.url)'
+if ($LASTEXITCODE -ne 0) { throw 'Could not read the deployed service.' }
+
+$DeployedEnv = gcloud run services describe $ServiceName `
+    --project $ProjectId --region $Region `
+    --format 'value(spec.template.spec.containers[0].env)'
+
+Write-Host ''
+Write-Host "    URL : $ServiceUrl" -ForegroundColor Green
+Write-Host "    env : $DeployedEnv"
+
+foreach ($Key in $RuntimeEnv.Keys) {
+    if ($DeployedEnv -notmatch [regex]::Escape($Key)) {
+        Write-Warning "$Key is missing from the deployed service. The container will fail at the first Gemini call."
+    }
+}
+
+Write-Host ''
+Write-Host 'Done. If you hit a cached error in the ADK Web UI: New Session + Ctrl+Shift+R.' -ForegroundColor DarkGray
