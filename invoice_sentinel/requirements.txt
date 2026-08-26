@@ -1,0 +1,12 @@
+# Runtime dependencies for the Cloud Run container.
+#
+# `adk deploy cloud_run` installs this file inside the image. Anything the
+# agent imports at runtime has to be listed here — and nothing else, because
+# every extra package is cold-start latency.
+#
+# Development-only tooling (PDF generation, tests) lives in the root
+# requirements-dev.txt and must never appear here.
+
+google-adk==2.7.1
+google-genai==2.20.0
+pydantic==2.13.4

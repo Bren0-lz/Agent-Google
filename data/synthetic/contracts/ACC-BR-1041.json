@@ -1,0 +1,86 @@
+{
+  "account_id": "ACC-BR-1041",
+  "carrier": "Vantel Empresas",
+  "currency": "BRL",
+  "effective_from": "2025-01-01",
+  "effective_to": null,
+  "plans": [
+    {
+      "plan_name": "Vantel Corp 5GB",
+      "monthly_rate": "59.90",
+      "allowances": [
+        {
+          "metric": "data_mb",
+          "included": "5120",
+          "overage_unit_rate": "0.02"
+        }
+      ]
+    },
+    {
+      "plan_name": "Vantel Corp 10GB",
+      "monthly_rate": "89.90",
+      "allowances": [
+        {
+          "metric": "data_mb",
+          "included": "10240",
+          "overage_unit_rate": "0.02"
+        }
+      ]
+    },
+    {
+      "plan_name": "Vantel Corp 20GB",
+      "monthly_rate": "129.90",
+      "allowances": [
+        {
+          "metric": "data_mb",
+          "included": "20480",
+          "overage_unit_rate": "0.02"
+        }
+      ]
+    },
+    {
+      "plan_name": "Vantel Corp 50GB",
+      "monthly_rate": "189.90",
+      "allowances": [
+        {
+          "metric": "data_mb",
+          "included": "51200",
+          "overage_unit_rate": "0.02"
+        }
+      ]
+    }
+  ],
+  "lines": [
+    {
+      "line_id": "11987650101",
+      "plan_name": "Vantel Corp 10GB",
+      "activated_on": "2025-03-01",
+      "cancelled_on": null
+    },
+    {
+      "line_id": "11987650102",
+      "plan_name": "Vantel Corp 10GB",
+      "activated_on": "2025-03-01",
+      "cancelled_on": null
+    },
+    {
+      "line_id": "11987650103",
+      "plan_name": "Vantel Corp 5GB",
+      "activated_on": "2025-03-01",
+      "cancelled_on": null
+    },
+    {
+      "line_id": "11987650104",
+      "plan_name": "Vantel Corp 20GB",
+      "activated_on": "2025-03-01",
+      "cancelled_on": null
+    },
+    {
+      "line_id": "11987650105",
+      "plan_name": "Vantel Corp 5GB",
+      "activated_on": "2025-03-01",
+      "cancelled_on": null
+    }
+  ],
+  "addons": []
+}

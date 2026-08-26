@@ -1,0 +1,77 @@
+{
+  "account_id": "ACC-US-77120",
+  "carrier": "Northwind Wireless",
+  "currency": "USD",
+  "effective_from": "2025-01-01",
+  "effective_to": null,
+  "plans": [
+    {
+      "plan_name": "Northwind Business 5GB",
+      "monthly_rate": "45.00",
+      "allowances": [
+        {
+          "metric": "data_mb",
+          "included": "5120",
+          "overage_unit_rate": "0.01"
+        }
+      ]
+    },
+    {
+      "plan_name": "Northwind Business 15GB",
+      "monthly_rate": "65.00",
+      "allowances": [
+        {
+          "metric": "data_mb",
+          "included": "15360",
+          "overage_unit_rate": "0.01"
+        }
+      ]
+    },
+    {
+      "plan_name": "Northwind Business Unlimited",
+      "monthly_rate": "85.00",
+      "allowances": [
+        {
+          "metric": "data_mb",
+          "included": "102400",
+          "overage_unit_rate": "0.01"
+        }
+      ]
+    }
+  ],
+  "lines": [
+    {
+      "line_id": "2065550110",
+      "plan_name": "Northwind Business 15GB",
+      "activated_on": "2025-11-01",
+      "cancelled_on": null
+    },
+    {
+      "line_id": "2065550111",
+      "plan_name": "Northwind Business 5GB",
+      "activated_on": "2025-11-01",
+      "cancelled_on": null
+    },
+    {
+      "line_id": "2065550112",
+      "plan_name": "Northwind Business 5GB",
+      "activated_on": "2025-11-01",
+      "cancelled_on": null
+    },
+    {
+      "line_id": "2065550113",
+      "plan_name": "Northwind Business Unlimited",
+      "activated_on": "2025-11-01",
+      "cancelled_on": null
+    }
+  ],
+  "addons": [
+    {
+      "addon_name": "International Roaming Pack",
+      "monthly_rate": "19.99",
+      "line_ids": [
+        "2065550113"
+      ]
+    }
+  ]
+}

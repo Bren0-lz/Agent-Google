@@ -1,0 +1,15 @@
+# Local development environment.
+#
+#   python -m venv .venv
+#   .\.venv\Scripts\Activate.ps1
+#   pip install -r requirements-dev.txt
+#
+# Includes the runtime dependencies plus tooling that stays on the workstation:
+# synthetic invoice generation and tests. See invoice_sentinel/requirements.txt
+# for what actually ships to Cloud Run.
+
+-r invoice_sentinel/requirements.txt
+
+reportlab==5.0.1   # renders the synthetic invoice PDFs
+pypdf==6.16.2       # reads generated PDFs back for verification
+pytest==9.1.1
