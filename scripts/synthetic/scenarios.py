@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
 from invoice_sentinel.anomaly import AnomalyType
+from invoice_sentinel.profiles import NORTHWIND, VANTEL
 from invoice_sentinel.contract import (
     Contract,
     ContractedAddon,
@@ -51,42 +52,9 @@ def money(value: Decimal | str | int) -> Decimal:
 
 
 # --- Carrier profiles --------------------------------------------------------
-
-VANTEL = ExtractionProfile(
-    profile_key="br-vantel-empresas",
-    carrier_name="Vantel Empresas",
-    country="BR",
-    currency="BRL",
-    decimal_separator=",",
-    thousands_separator=".",
-    date_format="%d/%m/%Y",
-    data_unit="GB",
-    tax_labels=["ICMS", "FUST", "FUNTTEL"],
-    prompt_hints=[
-        "Amounts use a comma as decimal separator and a dot for thousands.",
-        "Dates are DD/MM/YYYY.",
-        "'Franquia' is the included allowance, 'Excedente' is overage.",
-        "Taxes (ICMS, FUST, FUNTTEL) are account-level and have no line_id.",
-    ],
-)
-
-NORTHWIND = ExtractionProfile(
-    profile_key="us-northwind-wireless",
-    carrier_name="Northwind Wireless",
-    country="US",
-    currency="USD",
-    decimal_separator=".",
-    thousands_separator=",",
-    date_format="%m/%d/%Y",
-    data_unit="GB",
-    tax_labels=["Federal Universal Service Fund", "Regulatory Recovery Fee", "State Sales Tax"],
-    prompt_hints=[
-        "Amounts use a dot as decimal separator and a comma for thousands.",
-        "Dates are MM/DD/YYYY.",
-        "The usage summary appears before the charge detail.",
-        "Taxes, fees and surcharges are account-level and have no line_id.",
-    ],
-)
+# Defined in invoice_sentinel.profiles, not here: the extractor needs them at
+# runtime, and a profile described twice is a profile that drifts. Imported
+# above; the import there is what re-exports them to this module's callers.
 
 
 # --- Scenario specification --------------------------------------------------

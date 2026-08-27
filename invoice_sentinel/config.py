@@ -11,6 +11,7 @@ See deploy.ps1.
 from __future__ import annotations
 
 import os
+from decimal import Decimal
 
 # --- Model -------------------------------------------------------------------
 
@@ -55,6 +56,60 @@ MAX_EXTRACTION_REPAIRS: int = int(
     os.environ.get("INVOICE_SENTINEL_MAX_REPAIRS", "2")
 )
 
+#: How many times a single model call is retried after a transient API failure
+#: (5xx, rate limit). Separate from MAX_EXTRACTION_REPAIRS on purpose: a repair
+#: answers a wrong response, a retry answers no response at all, and letting a
+#: passing 500 consume a repair would cut the model's chances at the schema for
+#: a reason that has nothing to do with the invoice.
+MAX_TRANSIENT_RETRIES: int = int(
+    os.environ.get("INVOICE_SENTINEL_MAX_TRANSIENT_RETRIES", "3")
+)
+
+#: First backoff pause, in seconds; doubles per retry.
+TRANSIENT_RETRY_BACKOFF: float = float(
+    os.environ.get("INVOICE_SENTINEL_TRANSIENT_BACKOFF", "2.0")
+)
+
+#: Extraction is transcription, not composition. Anything above zero is the
+#: model choosing between readings of the same page, which is exactly what we
+#: do not want it doing to someone's phone bill.
+EXTRACTION_TEMPERATURE: float = float(
+    os.environ.get("INVOICE_SENTINEL_EXTRACTION_TEMPERATURE", "0.0")
+)
+
+#: Carrier profile assumed when the caller does not name one. See profiles.py —
+#: profile_for() still refuses unknown keys rather than guessing.
+DEFAULT_PROFILE_KEY: str = os.environ.get(
+    "INVOICE_SENTINEL_DEFAULT_PROFILE", "br-vantel-empresas"
+)
+
 #: Consecutive billing cycles a rule needs before it will claim a pattern.
 #: ChronicOverage, PlanTierMismatch and ZombieLine all key off this.
 PATTERN_CYCLES: int = int(os.environ.get("INVOICE_SENTINEL_PATTERN_CYCLES", "3"))
+
+# --- Rule thresholds ---------------------------------------------------------
+# Every number here is a judgement call about what counts as evidence, so it
+# lives in one visible place rather than buried in a comparison somewhere.
+
+#: Data below this (MB, per cycle) counts as "not really used". Not zero: a
+#: dormant SIM still emits background traffic, and a rule that only fires on an
+#: exact zero never fires in production.
+ZOMBIE_DATA_MB: Decimal = Decimal(os.environ.get("INVOICE_SENTINEL_ZOMBIE_DATA_MB", "50"))
+
+#: Voice minutes below this, per cycle, also count as "not really used".
+ZOMBIE_VOICE_MIN: Decimal = Decimal(os.environ.get("INVOICE_SENTINEL_ZOMBIE_VOICE_MIN", "15"))
+
+#: A plan is oversized only if peak consumption stays under this fraction of the
+#: allowance in every cycle. Deliberately strict — half-used is not wasteful.
+TIER_MAX_UTILISATION: Decimal = Decimal(
+    os.environ.get("INVOICE_SENTINEL_TIER_MAX_UTILISATION", "0.30")
+)
+
+#: Headroom kept when recommending a smaller plan. Right-sizing someone into a
+#: plan they would immediately exceed is worse than leaving them alone.
+TIER_HEADROOM: Decimal = Decimal(os.environ.get("INVOICE_SENTINEL_TIER_HEADROOM", "1.25"))
+
+#: Rate differences at or below this are rounding, not drift.
+RATE_DRIFT_TOLERANCE: Decimal = Decimal(
+    os.environ.get("INVOICE_SENTINEL_RATE_DRIFT_TOLERANCE", "0.01")
+)

@@ -161,13 +161,34 @@ $ServiceUrl = gcloud run services describe $ServiceName `
     --project $ProjectId --region $Region --format 'value(status.url)'
 if ($LASTEXITCODE -ne 0) { throw 'Could not read the deployed service.' }
 
+# `adk deploy` catches a failing `gcloud run deploy` and still exits 0, so the
+# exit code above proves nothing. Without this check the script happily prints
+# the URL and env vars of the PREVIOUS revision and calls it a success, which
+# is how a container that dies on startup gets mistaken for a working deploy.
+#
+# Comparing the two revision names, rather than filtering on the Ready
+# condition, keeps this free of gcloud filter syntax that is deprecating.
+$LatestRevision = gcloud run services describe $ServiceName `
+    --project $ProjectId --region $Region --format 'value(status.latestCreatedRevisionName)'
+$ServingRevision = gcloud run services describe $ServiceName `
+    --project $ProjectId --region $Region --format 'value(status.latestReadyRevisionName)'
+
+if ($LatestRevision -ne $ServingRevision) {
+    Write-Host ''
+    Write-Warning "Revision '$LatestRevision' was created but never became ready. Recent logs:"
+    gcloud logging read "resource.type=$([char]34)cloud_run_revision$([char]34) AND resource.labels.revision_name=$([char]34)$LatestRevision$([char]34)" `
+        --project $ProjectId --limit 30 --format 'value(textPayload)' --freshness 20m
+    throw "Deploy did not take: '$ServiceName' is still serving '$ServingRevision'. The URL below points at the previous revision."
+}
+
 $DeployedEnv = gcloud run services describe $ServiceName `
     --project $ProjectId --region $Region `
     --format 'value(spec.template.spec.containers[0].env)'
 
 Write-Host ''
-Write-Host "    URL : $ServiceUrl" -ForegroundColor Green
-Write-Host "    env : $DeployedEnv"
+Write-Host "    URL      : $ServiceUrl" -ForegroundColor Green
+Write-Host "    revision : $ServingRevision"
+Write-Host "    env      : $DeployedEnv"
 
 foreach ($Key in $RuntimeEnv.Keys) {
     if ($DeployedEnv -notmatch [regex]::Escape($Key)) {

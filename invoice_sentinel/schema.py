@@ -101,6 +101,25 @@ Money = Annotated[
 ]
 
 
+#: A non-monetary decimal: units, megabytes, minutes. Same string-on-the-wire
+#: treatment as Money, for the same reason — Pydantic's default JSON schema for
+#: Decimal is anyOf[number, string+pattern], and Gemini's structured-output
+#: subset does not digest it. These feed the rule engine's arithmetic, so float
+#: is no more acceptable here than it is for currency.
+Quantity = Annotated[
+    Decimal,
+    PlainSerializer(lambda d: format(d, "f"), return_type=str, when_used="json"),
+    WithJsonSchema(
+        {"type": "string", "description": "Decimal quantity, dot as decimal separator, e.g. \"1024\""},
+        mode="serialization",
+    ),
+    WithJsonSchema(
+        {"type": "string", "description": "Decimal quantity, dot as decimal separator, e.g. \"1024\""},
+        mode="validation",
+    ),
+]
+
+
 # --- Enums -------------------------------------------------------------------
 
 
@@ -159,6 +178,15 @@ class ExtractionProfile(BaseModel):
     tax_labels: list[str] = Field(
         default_factory=list,
         description="Line labels this carrier uses for taxes, e.g. ['ICMS', 'FUST', 'FUNTTEL']",
+    )
+    fee_labels: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Account-level lines this carrier charges as fees rather than taxes, "
+            "e.g. ['Regulatory Recovery Fee']. Kept apart from tax_labels because "
+            "the wording does not decide it: a US universal service fund is a fee "
+            "while the Brazilian FUST is a tax, and only the carrier knows which."
+        ),
     )
     prompt_hints: list[str] = Field(
         default_factory=list,
@@ -222,7 +250,7 @@ class ChargeItem(BaseModel):
     )
     category: ChargeCategory
     description: str
-    quantity: Decimal = Field(default=Decimal(1), ge=0)
+    quantity: Quantity = Field(default=Decimal(1), ge=0)
     unit_amount: Money | None = Field(
         default=None, description="Per-unit price, when the invoice prints one"
     )
@@ -250,9 +278,9 @@ class UsageRecord(BaseModel):
 
     line_id: str
     metric: UsageMetric
-    included: Decimal = Field(ge=0, description="Allowance included in the plan")
-    consumed: Decimal = Field(ge=0, description="Actually consumed this period")
-    overage: Decimal = Field(default=Decimal(0), ge=0, description="Billed above the allowance")
+    included: Quantity = Field(ge=0, description="Allowance included in the plan")
+    consumed: Quantity = Field(ge=0, description="Actually consumed this period")
+    overage: Quantity = Field(default=Decimal(0), ge=0, description="Billed above the allowance")
 
 
 # --- What the extractor may produce ------------------------------------------

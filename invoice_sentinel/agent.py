@@ -1,10 +1,16 @@
-from google.adk.agents.llm_agent import Agent
+"""Root agent exposed to `adk web` and `adk deploy`.
 
-from .config import MODEL_ID
+Provisional: the Day-2 target is a SequentialAgent chaining Extractor ->
+Auditor -> DisputeWriter. Until the auditor tools exist, the extractor is the
+root so the developer UI shows the real pipeline stage rather than boilerplate.
+"""
 
-root_agent = Agent(
-    model=MODEL_ID,
-    name='root_agent',
-    description='A helpful assistant for user questions.',
-    instruction='Answer user questions to the best of your knowledge',
+from .extractor_agent import ExtractorAgent
+
+root_agent = ExtractorAgent(
+    name="invoice_extractor",
+    description=(
+        "Transcribes a telecom invoice PDF into the canonical schema and stores "
+        "it in Firestore, keyed by the hash of the source document."
+    ),
 )
