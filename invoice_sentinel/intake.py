@@ -199,8 +199,11 @@ def help_text() -> str:
         "account's contract, attach that PDF too and say 'contract' — I will "
         "file it, and audit every invoice you send afterwards against it.\n"
         "2. I only read carriers I have a layout profile for:\n"
-        f"{carriers}\n"
-        "   Name the carrier in your message. Anything else I refuse rather "
+        f"{carriers}\n\n"
+        # Its own paragraph, and unindented: the UI renders this as Markdown,
+        # where an indented line after a list is swallowed as a continuation of
+        # the last bullet — on screen it ran straight on from the Northwind item.
+        "Name the carrier in your message. Anything else I refuse rather "
         "than misread."
     )
 
