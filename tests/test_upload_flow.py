@@ -182,3 +182,128 @@ def test_a_greeting_produces_one_answer_not_a_cascade():
 
     speakers = {event.author for event in events if said([event]).strip()}
     assert speakers == {"intake"}, f"only intake should speak, got {speakers}"
+
+
+def upload_pipeline(*, persist: bool = False):
+    """Intake and extractor: the pair that decides what gets read as what.
+
+    `persist` reaches only the extractor, and only the store lookup that skips a
+    second extraction — the tests that use it monkeypatch get_invoice.
+    """
+    from google.adk.agents import SequentialAgent
+
+    return SequentialAgent(
+        name="upload_pipeline",
+        sub_agents=[
+            IntakeAgent(name="intake", persist=False),
+            ExtractorAgent(name="invoice_extractor", persist=persist),
+        ],
+    )
+
+
+def canonical_billed_by(carrier: str) -> CanonicalInvoice:
+    """The committed extraction, re-badged as another carrier's document."""
+    payload = canonical_fixture().model_dump(mode="json")
+    payload["invoice"]["header"]["carrier"] = carrier
+    return CanonicalInvoice.model_validate(payload)
+
+
+def test_naming_the_wrong_carrier_is_refused(monkeypatch):
+    """The hole found in production: 'northwind' typed over a Vantel bill.
+
+    It was accepted and audited without a warning. The audit happened to come
+    out right only because the content hash hit an extraction made earlier under
+    the correct profile; a PDF arriving for the first time would have been read
+    with the American separator hints, which turn 1.234,56 into 1.234.
+    """
+    monkeypatch.setattr(
+        extractor_agent, "extract_invoice", lambda source, profile, **kw: canonical_fixture()
+    )
+
+    events = drive(
+        upload_pipeline(),
+        message_with_pdf("northwind", INVOICE_PDF.read_bytes(), "fatura.pdf"),
+    )
+
+    transcript = said(events)
+    assert "Refusing to audit this one" in transcript
+    # It names both carriers, so the person can see which one to correct.
+    assert "Northwind Wireless" in transcript
+    assert "Vantel Empresas" in transcript
+    # And no audit was published off the back of it.
+    assert "Extracted invoice" not in transcript
+
+    delta: dict = {}
+    for event in events:
+        if event.actions and event.actions.state_delta:
+            delta.update(event.actions.state_delta)
+    assert "canonical_invoice" not in delta
+    assert "content_hash" not in delta
+
+
+def test_a_carrier_with_no_profile_is_refused(monkeypatch):
+    """A Vivo bill sent as a Vantel one: refused rather than misread."""
+    monkeypatch.setattr(
+        extractor_agent,
+        "extract_invoice",
+        lambda source, profile, **kw: canonical_billed_by("Vivo Empresas"),
+    )
+
+    events = drive(
+        upload_pipeline(),
+        message_with_pdf("vantel", INVOICE_PDF.read_bytes(), "fatura.pdf"),
+    )
+
+    transcript = said(events)
+    assert "Refusing to audit this one" in transcript
+    assert "Vivo Empresas" in transcript
+    assert "Extracted invoice" not in transcript
+
+
+def test_the_carrier_check_tolerates_how_a_bill_prints_its_name(monkeypatch):
+    """VANTEL EMPRESAS S.A. is the same carrier as Vantel Empresas.
+
+    The check matches on aliases rather than on string equality, because a
+    refusal that fires on the carrier's own letterhead is worse than no check.
+    """
+    monkeypatch.setattr(
+        extractor_agent,
+        "extract_invoice",
+        lambda source, profile, **kw: canonical_billed_by("VANTEL EMPRESAS S.A."),
+    )
+
+    events = drive(
+        upload_pipeline(),
+        message_with_pdf("vantel", INVOICE_PDF.read_bytes(), "fatura.pdf"),
+    )
+
+    transcript = said(events)
+    assert "Refusing" not in transcript
+    assert "Extracted invoice ACC-BR-1041" in transcript
+
+
+def test_an_invoice_already_extracted_does_not_pay_for_a_second_extraction(monkeypatch):
+    """Re-sending a PDF used to cost a full extraction that was then discarded.
+
+    extract_invoice computed the content hash before calling the model, but
+    nothing consulted the store with it: save_invoice only found the duplicate
+    afterwards, by which point the tokens were spent.
+    """
+    stored = canonical_fixture()
+
+    def fail(*args, **kwargs):
+        raise AssertionError("the model was called for an invoice already on file")
+
+    monkeypatch.setattr(extractor_agent, "extract_invoice", fail)
+    monkeypatch.setattr(
+        extractor_agent.store,
+        "get_invoice",
+        lambda digest, **kw: stored if digest == stored.content_hash else None,
+    )
+
+    events = drive(upload_pipeline(persist=True), message_with_pdf("vantel", INVOICE_PDF.read_bytes(), "f.pdf"))
+
+    transcript = said(events)
+    assert "Extracted invoice ACC-BR-1041" in transcript
+    assert "not re-extracted" in transcript
+

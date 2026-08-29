@@ -19,6 +19,7 @@ to build against:
 
 from __future__ import annotations
 
+import dataclasses
 from typing import AsyncGenerator
 
 from google.adk.agents import BaseAgent
@@ -28,8 +29,9 @@ from google.genai import types
 
 from . import config, store
 from .extractor import ExtractionFailed, InvoiceSource, extract_invoice
-from .intake import split_attachments
+from .intake import profile_key_in, split_attachments
 from .profiles import profile_for
+from .schema import content_hash
 
 
 class ExtractorAgent(BaseAgent):
@@ -51,21 +53,42 @@ class ExtractorAgent(BaseAgent):
 
         profile = profile_for(state.get("profile_key") or config.DEFAULT_PROFILE_KEY)
 
-        try:
-            canonical = extract_invoice(source, profile)
-        except ExtractionFailed as failure:
-            # Surfaced rather than swallowed: an invoice the model cannot read is
-            # a case for a human, not a silently empty audit.
-            yield self._say(
-                ctx,
-                f"Extraction failed for {failure.source_uri} after "
-                f"{failure.attempts} attempt(s). Escalating for human review.\n"
-                + "\n".join(failure.repair_notes[-1:]),
-            )
+        # The bytes are read once, here, so the content hash can be looked up
+        # before the model is called: re-sending a PDF that has already been
+        # extracted used to pay for a full extraction that save_invoice then
+        # threw away as AlreadyExists. `replace` keeps the uri, so provenance
+        # and as_part's gs:// branch are unaffected — it only carries the bytes
+        # along so a GCS source is not downloaded a second time.
+        pdf_bytes = source.read()
+        digest = content_hash(pdf_bytes)
+        source = dataclasses.replace(source, _data=pdf_bytes)
+
+        canonical = store.get_invoice(digest) if self.persist else None
+        created = canonical is None
+
+        if canonical is None:
+            try:
+                canonical = extract_invoice(source, profile)
+            except ExtractionFailed as failure:
+                # Surfaced rather than swallowed: an invoice the model cannot read is
+                # a case for a human, not a silently empty audit.
+                yield self._say(
+                    ctx,
+                    f"Extraction failed for {failure.source_uri} after "
+                    f"{failure.attempts} attempt(s). Escalating for human review.\n"
+                    + "\n".join(failure.repair_notes[-1:]),
+                )
+                return
+
+        mismatch = self._carrier_mismatch(canonical, profile)
+        if mismatch is not None:
+            # Nothing is persisted and nothing reaches state, so every stage
+            # downstream stops on its own: the auditor has nothing_was_extracted
+            # and the dispute writer returns without a canonical invoice.
+            yield self._say(ctx, mismatch)
             return
 
-        created = True
-        if self.persist:
+        if self.persist and created:
             canonical, created = store.save_invoice(canonical)
 
         summary = (
@@ -80,7 +103,10 @@ class ExtractorAgent(BaseAgent):
         if canonical.provenance.warnings:
             summary += "\nWarnings: " + "; ".join(canonical.provenance.warnings)
         if not created:
-            summary += "\nAlready in Firestore under this content hash; not rewritten."
+            summary += (
+                "\nAlready in Firestore under this content hash; reused as stored "
+                "and not re-extracted."
+            )
 
         yield self._say(
             ctx,
@@ -90,6 +116,31 @@ class ExtractorAgent(BaseAgent):
                 "content_hash": canonical.content_hash,
                 "extraction_created": created,
             },
+        )
+
+    def _carrier_mismatch(self, canonical, profile) -> str | None:
+        """Why this invoice must not be read with this profile, or None.
+
+        profile_for() refuses a carrier it has no layout for rather than
+        guessing, but nothing used to check that the carrier the caller named is
+        the carrier printed on the page. Saying 'northwind' over a Vantel bill
+        was accepted in production and audited without a word of warning: the
+        American profile's separator hints read 1.234,56 as 1.234, which is
+        exactly the plausible-and-wrong number that refusing exists to prevent.
+
+        Matched with profile_key_in rather than string equality, because a bill
+        prints VANTEL EMPRESAS S.A. where the profile says Vantel Empresas.
+        """
+        printed = canonical.invoice.header.carrier
+        if profile_key_in(printed) == profile.profile_key:
+            return None
+
+        return (
+            f"Refusing to audit this one. You asked me to read it as a "
+            f"{profile.carrier_name} invoice, but the bill says it was issued by "
+            f"{printed!r}. Reading a carrier's layout with another carrier's "
+            f"profile produces figures that look right and are not, so I would "
+            f"rather stop here. Name the right carrier and send it again."
         )
 
     def _source(self, ctx: InvocationContext, state) -> InvoiceSource | None:
