@@ -1,0 +1,15 @@
+# Os PDFs sintéticos sao o ancoradouro de todas as metricas publicadas: o
+# content_hash de cada arquivo e a chave do documento no Firestore e o nome do
+# arquivo em data/extracted/. Um unico byte alterado invalida o dataset inteiro.
+#
+# O Git for Windows vem com core.autocrlf=true por padrao e a heuristica dele
+# classificou estes PDFs como texto, convertendo cada LF em CRLF no checkout.
+# Resultado: 15 arquivos corrompidos no working tree e
+# test_fixture_hashes_match_the_published_ground_truth falhando em qualquer
+# clone feito no Windows. Marcar como binario e o que impede isso.
+*.pdf binary
+
+# Mesma protecao para qualquer outro binario que venha a entrar no dataset.
+*.png binary
+*.jpg binary
+*.zip binary
