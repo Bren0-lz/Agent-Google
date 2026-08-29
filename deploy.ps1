@@ -46,7 +46,10 @@ param(
     # Gemini endpoint. Must stay 'global' for Gemini 3.x. See region rule above.
     [string] $ModelLocation = 'global',
 
-    # Bucket holding raw invoice PDFs. Must match config.RAW_INVOICE_BUCKET.
+    # Bucket the gs:// source_uri path reads from. Uploaded PDFs never land
+    # here - or anywhere: intake reads the attachment from the message and the
+    # bytes are gone with the request. This holds the documents someone chose
+    # to stage, which today is the sample the README's curl example audits.
     [string] $Bucket = 'agent-hackton-invoices-raw',
 
     # Bucket holding the dispute letters and customer summaries the agent
@@ -75,11 +78,19 @@ param(
     [int] $MaxInstances = 2,
     [int] $Concurrency  = 8,
 
+    # Runtime identity. Deliberately not the default Compute service account,
+    # which carries roles/editor over the whole project: a public endpoint that
+    # can rewrite its own infrastructure is a much larger blast radius than the
+    # job needs. Created by -EnableApis with the four roles the agent actually
+    # uses. Pass '' to fall back to the project default.
+    [string] $ServiceAccount = 'invoice-sentinel-run',
+
     # One-time: enable the Google Cloud APIs this project depends on.
     [switch] $EnableApis
 )
 
 $ErrorActionPreference = 'Stop'
+$SaEmail = if ($ServiceAccount) { "$ServiceAccount@$ProjectId.iam.gserviceaccount.com" } else { '' }
 $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $RepoRoot
 
@@ -117,6 +128,7 @@ Write-Host "    project : $ProjectId"
 Write-Host "    region  : $Region (Gemini endpoint: $ModelLocation)"
 Write-Host "    service : $ServiceName"
 Write-Host "    scaling : $MinInstances warm, at most $MaxInstances instance(s) x $Concurrency concurrent request(s)"
+Write-Host "    runs as : $(if ($SaEmail) { $SaEmail } else { 'project default (roles/editor - not recommended)' })"
 
 gcloud config set project $ProjectId --quiet
 if ($LASTEXITCODE -ne 0) { throw "Failed to select project '$ProjectId'. Are you authenticated?" }
@@ -147,7 +159,8 @@ if ($EnableApis) {
     $Existing = gcloud storage buckets list --project $ProjectId --format 'value(name)'
     if ($Existing -notcontains $Bucket) {
         gcloud storage buckets create "gs://$Bucket" --project $ProjectId `
-            --location $Region --uniform-bucket-level-access
+            --location $Region --uniform-bucket-level-access `
+            --public-access-prevention
         if ($LASTEXITCODE -ne 0) { throw "Failed to create gs://$Bucket" }
     } else {
         Write-Host "    gs://$Bucket already exists"
@@ -160,11 +173,69 @@ if ($EnableApis) {
         Write-Step "Creating the artifact bucket (skipped if it exists)"
         if ($Existing -notcontains $ArtifactBucket) {
             gcloud storage buckets create "gs://$ArtifactBucket" --project $ProjectId `
-                --location $Region --uniform-bucket-level-access
+                --location $Region --uniform-bucket-level-access `
+                --public-access-prevention
             if ($LASTEXITCODE -ne 0) { throw "Failed to create gs://$ArtifactBucket" }
         } else {
             Write-Host "    gs://$ArtifactBucket already exists"
         }
+    }
+
+    # The runtime identity, with the narrowest set of roles that still lets the
+    # agent do its job. Everything here is write-scoped to what it names:
+    # Firestore for the audit trail, Vertex for Gemini, and object access on the
+    # two buckets granted at the bucket, not at the project. logWriter and
+    # cloudtrace.agent are what --trace_to_cloud needs; without them the traces
+    # fail silently and the deploy still looks healthy.
+    if ($ServiceAccount) {
+        Write-Step "Creating the runtime service account (skipped if it exists)"
+        $ExistingSa = gcloud iam service-accounts list --project $ProjectId --format 'value(email)'
+        if ($ExistingSa -notcontains $SaEmail) {
+            gcloud iam service-accounts create $ServiceAccount --project $ProjectId `
+                --display-name 'Invoice Sentinel runtime' `
+                --description 'Cloud Run identity for the invoice-sentinel agent'
+            if ($LASTEXITCODE -ne 0) { throw "Failed to create $SaEmail" }
+        } else {
+            Write-Host "    $SaEmail already exists"
+        }
+
+        foreach ($Role in @('roles/datastore.user', 'roles/aiplatform.user',
+                            'roles/logging.logWriter', 'roles/cloudtrace.agent')) {
+            Write-Host "    granting $Role"
+            gcloud projects add-iam-policy-binding $ProjectId `
+                --member "serviceAccount:$SaEmail" --role $Role --condition=None --quiet | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "Failed to grant $Role to $SaEmail" }
+        }
+
+        # Read on the raw bucket, because README's source_uri path downloads
+        # from it. Write on the artifact bucket, because the letter and the
+        # summary are stored there. Neither grant leaves its bucket.
+        Write-Host "    granting objectViewer on gs://$Bucket"
+        gcloud storage buckets add-iam-policy-binding "gs://$Bucket" --project $ProjectId `
+            --member "serviceAccount:$SaEmail" --role 'roles/storage.objectViewer' --quiet | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to grant read on gs://$Bucket" }
+        if ($ArtifactBucket) {
+            Write-Host "    granting objectAdmin on gs://$ArtifactBucket"
+            gcloud storage buckets add-iam-policy-binding "gs://$ArtifactBucket" --project $ProjectId `
+                --member "serviceAccount:$SaEmail" --role 'roles/storage.objectAdmin' --quiet | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "Failed to grant write on gs://$ArtifactBucket" }
+        }
+    }
+
+    # Retention on the artifact bucket. The letter and the summary carry the
+    # account number and every disputed amount, and unlike the session that
+    # produced them - held in memory, gone on the next revision - they would
+    # otherwise live forever. Read from the committed file for the same reason
+    # the indexes are: a rule set by hand in the console is not a setup anyone
+    # can reproduce.
+    if ($ArtifactBucket) {
+        Write-Step 'Applying artifact retention'
+        $LifecycleFile = Join-Path $RepoRoot 'artifact-lifecycle.json'
+        $Days = (Get-Content $LifecycleFile -Raw | ConvertFrom-Json).rule[0].condition.age
+        Write-Host "    gs://$ArtifactBucket : delete after $Days days"
+        gcloud storage buckets update "gs://$ArtifactBucket" --project $ProjectId `
+            --lifecycle-file=$LifecycleFile --quiet | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Failed to set retention on gs://$ArtifactBucket" }
     }
 
     # Composite indexes, from the committed firestore.indexes.json rather than
@@ -186,13 +257,36 @@ if ($EnableApis) {
     }
 }
 
+# --- Runtime identity check --------------------------------------------------
+# Refuse rather than guess: deploying without the account silently falls back to
+# the default Compute identity, which holds roles/editor, and nothing in the
+# output would say so.
+
+if ($ServiceAccount) {
+    gcloud iam service-accounts describe $SaEmail --project $ProjectId --format 'value(email)' | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Service account $SaEmail does not exist. Run '.\deploy.ps1 -EnableApis' once to create it, or pass -ServiceAccount '' to accept the project default."
+    }
+}
+
 # --- Runtime environment -----------------------------------------------------
-# The three variables the container cannot start correctly without.
+# The three variables the container cannot start correctly without, plus one
+# that decides what a trace is allowed to carry.
 
 $RuntimeEnv = [ordered]@{
     GOOGLE_GENAI_USE_VERTEXAI = 'TRUE'
     GOOGLE_CLOUD_PROJECT      = $ProjectId
     GOOGLE_CLOUD_LOCATION     = $ModelLocation
+
+    # Keep the invoice out of Cloud Trace. --trace_to_cloud is on because
+    # latency, token counts and errors are worth having; the transcribed
+    # invoice - account number, MSISDNs, employee names - is not, and with
+    # this unset the ADK writes the whole llm_request and llm_response onto
+    # the span. The ADK sets exactly this value itself when deploying to
+    # Agent Engine and forgets to on the Cloud Run path, so we inherit the
+    # unsafe default by omission. Same shape as the cost ceiling: state it
+    # here or lose it on the next deploy.
+    ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS = 'false'
 }
 
 $EnvFile = Join-Path ([System.IO.Path]::GetTempPath()) "invoice-sentinel-env-$(Get-Date -Format 'yyyyMMddHHmmss').yaml"
@@ -225,6 +319,7 @@ $AdkArgs += @(
     "--concurrency=$Concurrency"
     '--allow-unauthenticated'
 )
+if ($SaEmail) { $AdkArgs += "--service-account=$SaEmail" }
 
 try {
     & $Adk @AdkArgs
@@ -272,8 +367,20 @@ Write-Host "    env      : $DeployedEnv"
 
 foreach ($Key in $RuntimeEnv.Keys) {
     if ($DeployedEnv -notmatch [regex]::Escape($Key)) {
-        Write-Warning "$Key is missing from the deployed service. The container will fail at the first Gemini call."
+        if ($Key -eq 'ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS') {
+            Write-Warning "$Key is missing from the deployed service. Traces will carry the full invoice content."
+        } else {
+            Write-Warning "$Key is missing from the deployed service. The container will fail at the first Gemini call."
+        }
     }
+}
+
+$DeployedSa = gcloud run services describe $ServiceName `
+    --project $ProjectId --region $Region `
+    --format 'value(spec.template.spec.serviceAccountName)'
+Write-Host "    runs as  : $DeployedSa"
+if ($SaEmail -and $DeployedSa -ne $SaEmail) {
+    Write-Warning "Expected the service to run as $SaEmail. It is running as '$DeployedSa', which on a default project means roles/editor."
 }
 
 Write-Host ''
