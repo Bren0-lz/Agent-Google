@@ -219,3 +219,8 @@ __marimo__/
 
 # Documentacao local (nao versionada)
 /docs/
+
+# Contexto de trabalho local: notas de handoff entre sessoes e configuracao do
+# Claude Code. Nada aqui pertence a submissao publica, e settings.local.json
+# pode carregar caminhos e permissoes desta maquina.
+.claude/
