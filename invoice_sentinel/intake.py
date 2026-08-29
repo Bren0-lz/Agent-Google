@@ -182,29 +182,43 @@ def looks_like_contract(text: str, attachment: PdfAttachment) -> bool:
 def help_text() -> str:
     """What to say to someone who sent no PDF.
 
-    The old message named a state key the person can neither set nor see. This
-    one names the thing they can actually do.
+    The first version named a state key the person can neither set nor see.
+    This one shows the message they are supposed to send. Someone opening the
+    agent for the first time is not short of description — they are short of
+    one worked example, and the detail they get wrong is that the PDF and the
+    carrier's name travel in the same message, not in two.
     """
     carriers = "\n".join(
-        f"   - {profile.carrier_name} ({profile.country}) — say "
+        f"- {profile.carrier_name} ({profile.country}) — say "
         f"'{profile.carrier_name.split()[0].lower()}' or '{key}'"
         for key, profile in sorted(PROFILES.items())
     )
+    example = sorted(PROFILES.values(), key=lambda p: p.profile_key)[0]
     return (
-        "Attach a telecom invoice as a PDF and I will audit it: I read every "
-        "line, compare it against the contract and against the account's "
+        "I audit telecom invoices. Attach one as a PDF and I read every line, "
+        "compare it against the signed contract and against the account's "
         "earlier cycles, and draft what is worth disputing.\n\n"
-        "Two things worth knowing:\n"
-        "1. I audit against a signed contract. If I have never seen this "
-        "account's contract, attach that PDF too and say 'contract' — I will "
-        "file it, and audit every invoice you send afterwards against it.\n"
-        "2. I only read carriers I have a layout profile for:\n"
+        "**Send it like this** — the PDF and the carrier's name in the same "
+        "message:\n\n"
+        f"    [attach {example.carrier_name.split()[0].lower()}-july.pdf]  "
+        f"{example.carrier_name.split()[0].lower()}\n\n"
+        "Carriers I have a layout profile for:\n\n"
         f"{carriers}\n\n"
-        # Its own paragraph, and unindented: the UI renders this as Markdown,
+        # Unindented and in its own paragraph: the UI renders this as Markdown,
         # where an indented line after a list is swallowed as a continuation of
-        # the last bullet — on screen it ran straight on from the Northwind item.
-        "Name the carrier in your message. Anything else I refuse rather "
-        "than misread."
+        # the last bullet — on screen it ran straight on from the last item.
+        "Any other carrier I refuse rather than misread, and I check the name "
+        "you give against the one printed on the bill.\n\n"
+        "**Two things worth knowing before you send one:**\n\n"
+        "1. I audit against a signed contract. Without one I cannot tell an "
+        "overcharge from a charge you agreed to, so I will say I could not "
+        "audit it rather than call it clean. If I have never seen this "
+        "account's contract, attach that PDF too and say 'contract' — I file "
+        "it, and every invoice you send afterwards is audited against it.\n"
+        f"2. One invoice is enough to catch a wrong rate or an add-on nobody "
+        f"agreed to. Findings about plan sizing claim a *pattern*, so they stay "
+        f"quiet until the account has {config.PATTERN_CYCLES} consecutive "
+        f"cycles on file."
     )
 
 

@@ -185,7 +185,7 @@ def test_no_attachment_explains_what_to_do():
     events = run(agent, fake_ctx(message(types.Part(text="oi"))))
 
     said = texts(events)
-    assert "Attach a telecom invoice" in said
+    assert "audit telecom invoices" in said
     assert "source_uri" not in said
     for profile in (VANTEL, NORTHWIND):
         assert profile.carrier_name in said
@@ -332,3 +332,28 @@ def test_help_text_offers_the_short_name_too():
     said = help_text()
     assert "'vantel'" in said
     assert "'northwind'" in said
+
+
+def test_help_text_shows_the_message_it_wants_back():
+    """The detail people get wrong is that both travel in one message.
+
+    Describing the two inputs is not the same as showing them together. The
+    first version of this text described them and someone still sent the PDF
+    on its own, because nothing on screen said they belonged in one message.
+    """
+    said = help_text()
+
+    example = [line for line in said.splitlines() if "[attach" in line]
+    assert len(example) == 1, "exactly one worked example, or it stops being one"
+    assert "vantel" in example[0], "the example names a carrier it will accept"
+
+
+def test_help_text_promises_not_to_call_an_unauditable_invoice_clean():
+    """The claim the judgment prompt has to keep.
+
+    Without a contract three of the five rules are skipped, so silence means
+    'not checked', not 'nothing wrong'. Saying so up front is what makes the
+    later refusal read as a guarantee rather than as a failure.
+    """
+    said = help_text()
+    assert "rather than call it clean" in said

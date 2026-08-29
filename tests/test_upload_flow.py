@@ -149,7 +149,7 @@ def test_an_empty_message_gets_help_and_no_extraction(monkeypatch):
     events = drive(pipeline, types.Content(role="user", parts=[types.Part(text="oi")]))
 
     transcript = said(events)
-    assert "Attach a telecom invoice" in transcript
+    assert "audit telecom invoices" in transcript
     assert "nothing to extract" not in transcript
 
 
@@ -171,7 +171,7 @@ def test_a_greeting_produces_one_answer_not_a_cascade():
     events = drive(root_agent, types.Content(role="user", parts=[types.Part(text="oi")]))
 
     transcript = said(events)
-    assert "Attach a telecom invoice" in transcript
+    assert "audit telecom invoices" in transcript
 
     # The false statement, and the noise that surrounded it.
     assert "looks clean" not in transcript
