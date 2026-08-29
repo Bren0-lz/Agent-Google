@@ -49,6 +49,14 @@ param(
     # Bucket holding raw invoice PDFs. Must match config.RAW_INVOICE_BUCKET.
     [string] $Bucket = 'agent-hackton-invoices-raw',
 
+    # Bucket holding the dispute letters and customer summaries the agent
+    # attaches to a session. Deliberately not $Bucket: one holds documents the
+    # carrier issued, the other holds documents written on the customer's
+    # behalf, and they do not belong under the same retention or access story.
+    # Empty string falls back to the ADK's in-memory service, which loses the
+    # attachments whenever the container is recycled.
+    [string] $ArtifactBucket = 'agent-hackton-artifacts',
+
     # Deploy the ADK API server only (no developer web UI).
     [switch] $NoUi,
 
@@ -135,6 +143,20 @@ if ($EnableApis) {
         Write-Host "    gs://$Bucket already exists"
     }
 
+    # The artifact bucket, on the same terms. Without it the letter and the
+    # summary live only in the container's memory and vanish on the next
+    # revision, which makes the Artifacts tab lie about what is on file.
+    if ($ArtifactBucket) {
+        Write-Step "Creating the artifact bucket (skipped if it exists)"
+        if ($Existing -notcontains $ArtifactBucket) {
+            gcloud storage buckets create "gs://$ArtifactBucket" --project $ProjectId `
+                --location $Region --uniform-bucket-level-access
+            if ($LASTEXITCODE -ne 0) { throw "Failed to create gs://$ArtifactBucket" }
+        } else {
+            Write-Host "    gs://$ArtifactBucket already exists"
+        }
+    }
+
     # Composite indexes, from the committed firestore.indexes.json rather than
     # from the link Firestore prints in an error. An index that only exists
     # because someone clicked a console link is not a reproducible setup - and
@@ -183,6 +205,7 @@ $AdkArgs = @(
     '--trace_to_cloud'
 )
 if (-not $NoUi) { $AdkArgs += '--with_ui' }
+if ($ArtifactBucket) { $AdkArgs += "--artifact_service_uri=gs://$ArtifactBucket" }
 $AdkArgs += @(
     $AgentPath
     '--'
