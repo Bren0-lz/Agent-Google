@@ -44,6 +44,15 @@ param(
     # Bucket holding raw invoice PDFs. Must match config.RAW_INVOICE_BUCKET.
     [string] $Bucket = 'agent-hackton-invoices-raw',
 
+    # Cost ceiling, not a performance setting. The service runs
+    # --allow-unauthenticated, so these two numbers bound what an abusive
+    # visitor can turn into billed Gemini calls: at most
+    # MaxInstances * Concurrency requests can be in flight at once. They live
+    # here, and not only on the deployed service, because a later run of this
+    # script would otherwise put the old unbounded values back.
+    [int] $MaxInstances = 2,
+    [int] $Concurrency  = 8,
+
     # Deploy the ADK API server only (no developer web UI).
     [switch] $NoUi,
 
@@ -88,6 +97,7 @@ Write-Host "    adk     : $Adk ($(& $Adk --version))"
 Write-Host "    project : $ProjectId"
 Write-Host "    region  : $Region (Gemini endpoint: $ModelLocation)"
 Write-Host "    service : $ServiceName"
+Write-Host "    ceiling : max $MaxInstances instance(s) x $Concurrency concurrent request(s)"
 
 gcloud config set project $ProjectId --quiet
 if ($LASTEXITCODE -ne 0) { throw "Failed to select project '$ProjectId'. Are you authenticated?" }
@@ -177,6 +187,8 @@ $AdkArgs += @(
     '--'
     "--env-vars-file=$EnvFile"
     '--allow-unauthenticated'
+    "--max-instances=$MaxInstances"
+    "--concurrency=$Concurrency"
 )
 
 try {
