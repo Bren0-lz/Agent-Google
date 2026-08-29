@@ -30,6 +30,11 @@
 .EXAMPLE
     .\deploy.ps1 -NoUi
     Deploys the ADK API server only, without the developer web UI.
+
+.EXAMPLE
+    .\deploy.ps1 -MinInstances 0
+    Deploys scaling to zero. Cheaper to leave running, at the cost of a ~16s
+    cold start on the first request after an idle period.
 #>
 [CmdletBinding()]
 param(
@@ -46,6 +51,12 @@ param(
 
     # Deploy the ADK API server only (no developer web UI).
     [switch] $NoUi,
+
+    # Warm instances kept running. The default of 1 costs one idle Cloud Run
+    # instance around the clock and buys back the ~16s cold start, which is the
+    # first thing anyone opening the demo would otherwise sit through. Pass 0 to
+    # scale to zero between uses.
+    [int] $MinInstances = 1,
 
     # One-time: enable the Google Cloud APIs this project depends on.
     [switch] $EnableApis
@@ -176,6 +187,7 @@ $AdkArgs += @(
     $AgentPath
     '--'
     "--env-vars-file=$EnvFile"
+    "--min-instances=$MinInstances"
     '--allow-unauthenticated'
 )
 
