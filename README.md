@@ -445,17 +445,103 @@ The two PDF templates are deliberately unalike — Brazilian (A4, purple, opens 
 |---|---|
 | **Vertex AI** (Gemini 3.5 Flash) | Multimodal PDF extraction, audit judgement, document drafting |
 | **Google ADK 2.7.1** | Agent graph: `SequentialAgent`, `ParallelAgent`, tools, session state |
-| **Cloud Run** | Hosts the agent and the ADK API server; `--trace_to_cloud` enabled |
+| **Cloud Run** | Hosts the agent and the ADK API server; `--trace_to_cloud` enabled, message content excluded |
 | **Firestore** (Native) | Canonical invoices, contracts, anomalies, disputes, review queue |
-| **Cloud Storage** | Two buckets, both uniform bucket-level access: raw invoice PDFs read by `gs://` URI, and the ADK artifact store holding the generated letters |
-| **Cloud Trace** | Per-run agent traces, including every tool call |
-| **Pub/Sub** | Event-driven ingestion with a dead-letter queue |
-| **Secret Manager** | Runtime secrets, least-privilege service account |
+| **Cloud Storage** | Two buckets, uniform access and public access prevention enforced: documents staged for the `gs://` path, and the ADK artifact store holding the generated letters |
+| **Cloud Trace** | Per-run agent traces: timings, token counts, tool calls — never the invoice |
+| **IAM** | A dedicated runtime service account, `invoice-sentinel-run`, not the project default |
+
+Not in the table, because they are not deployed: **Pub/Sub** ingestion and **Secret Manager**.
+`store.py` and `extractor.py` are written to survive a redelivery, and the idempotency below is
+what would make an at-least-once queue safe — but no topic exists, and the agent holds no secret
+to store: it authenticates as its service account.
 
 Invoices in the bucket are read **by reference** (`Part.from_uri`) rather than uploaded again, and
 persisted keyed by the SHA-256 of the source bytes. `save_invoice` uses `create()`, not `set()`, so
 the same PDF submitted twice loses the race by design — **idempotency is a property of the key, not
 a check the caller has to remember to perform.**
+
+---
+
+## Security and privacy
+
+A telephone invoice is personal data — line numbers, employee names, an itemised record of who
+called whom. This section states what is true of the deployed service today, then what a
+production engagement would add. The order matters: the guarantees below are properties of the
+design, not promises in a policy.
+
+### What the design already guarantees
+
+**The uploaded PDF is never stored.** Not "deleted after N days" — never written. `intake` reads
+the attachment out of the message, the extractor works on those bytes in memory, and they are gone
+when the request ends. `upload://<sha256>` records the hash, not the document. There is no
+retention rule to get wrong, because there is nothing retained.
+
+**Nothing logs the invoice.** The package contains no `print`, no logger, and no logging
+configuration. Cloud Trace is enabled, because latency, token counts and failures are worth
+having — but `ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS=false` keeps the prompt and the completion off
+the span. The ADK's default is the opposite, and it sets this value itself only on the Agent
+Engine deployment path; on Cloud Run it is `deploy.ps1` that has to say it.
+
+**The runtime identity is scoped to the job.** The service runs as `invoice-sentinel-run` with
+Firestore, Vertex AI, log-writing and trace-writing at the project level, and object access
+granted *on the two buckets* rather than across the project. It is not the default Compute
+service account, which carries `roles/editor`. `deploy.ps1` refuses to deploy if the account is
+missing rather than falling back to the default in silence.
+
+**Derived documents expire.** The dispute letter and the customer summary carry the account
+number and every disputed figure, and they are the one artefact that used to outlive everything
+else: the session that produced them is in-memory and does not survive a revision, but the object
+in the bucket had no end date. They are now deleted after 30 days (`artifact-lifecycle.json`).
+
+The structured audit record — the canonical invoice, its findings and the dispute — stays in
+Firestore with no expiry, deliberately: an audit you cannot re-examine later is not an audit. That
+is the data a retention policy belongs to, and setting one is a customer decision, not a default
+this repository should pick.
+
+**The agent is built to run in the customer's own project.** Project, region, model endpoint and
+both bucket names are environment variables; `deploy.ps1` takes `-ProjectId`, `-Region` and
+`-ArtifactBucket`. A per-customer deployment is a flag, not a refactor:
+
+> *The agent is designed to run inside the customer's own Google Cloud project — invoices never
+> leave their perimeter.*
+
+That is the architectural answer to data custody, and it is stronger than any assurance the
+operator of a shared service could offer: there is nothing to trust them with.
+
+### What is deliberately open, and why
+
+The hosted demo runs `--allow-unauthenticated` so that a reviewer can open the URL and use it.
+Two consequences, stated rather than buried:
+
+- Anyone who reaches the endpoint can spend Vertex AI quota. The ceiling is structural —
+  `--max-instances=2 --concurrency=8` in `deploy.ps1`, plus a billing budget alert.
+- A generated letter is readable by anyone holding its session UUID, which travels in the URL.
+  The 30-day lifecycle bounds that window.
+
+Both are acceptable for a demo of synthetic invoices and unacceptable for a real engagement.
+Closing it is one reversible command:
+
+```bash
+gcloud run services remove-iam-policy-binding invoice-sentinel \
+  --member=allUsers --role=roles/run.invoker
+```
+
+### What production would add
+
+- **PII minimisation.** `ServiceLine.line_id` (the MSISDN) and `assigned_to` are persisted whole.
+  Masking to the last digits is the obvious hardening — and the reason it is not done here is
+  worth stating plainly: the dispute letter has to identify the line for the carrier to act on it.
+  Masking at rest means keeping the mapping somewhere, which moves the problem rather than solving
+  it. The right design is per-tenant separation, not redaction.
+- **Data residency.** Firestore and both buckets are in `us-central1`. A Brazilian customer would
+  want `southamerica-east1`; `-Region` already parameterises it, but the Gemini endpoint stays
+  `global` and that is a conversation, not a flag.
+- **CMEK** on Firestore and Cloud Storage, so the customer holds the key to their own data.
+- **VPC Service Controls**, so a leaked credential still cannot move data out of the perimeter.
+- **Per-tenant isolation** — bucket prefix and Firestore collection per customer, with conditional
+  IAM — which the per-project deployment above makes largely moot.
+- **Audit trail.** Cloud Audit Logs recording who read which invoice.
 
 ---
 
