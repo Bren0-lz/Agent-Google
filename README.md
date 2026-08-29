@@ -6,7 +6,7 @@
 [![Google ADK 2.7.1](https://img.shields.io/badge/Google%20ADK-2.7.1-34A853)](https://google.github.io/adk-docs/)
 [![Cloud Run](https://img.shields.io/badge/Cloud%20Run-deployed-4285F4)](https://cloud.google.com/run)
 [![Firestore](https://img.shields.io/badge/Firestore-native-FBBC04)](https://cloud.google.com/firestore)
-[![Tests](https://img.shields.io/badge/tests-153%20passing-34A853)](#a--zero-credentials-90-seconds)
+[![Tests](https://img.shields.io/badge/tests-161%20passing-34A853)](#a--zero-credentials-90-seconds)
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
 
 > **Live service:** https://invoice-sentinel-474711060457.us-central1.run.app
@@ -207,7 +207,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-**153 tests, fully offline.** No Google Cloud project, no API key, no billing. This includes
+**161 tests, fully offline.** No Google Cloud project, no API key, no billing. This includes
 `test_extracted_audit.py`, which replays the committed extractions in `data/extracted/` through the
 real rule engine and asserts the exact recovery figures — the end-to-end claim, verified without
 spending a token.
@@ -399,7 +399,7 @@ scripts/                      dev-only; never enters the container
 
 data/synthetic/               15 PDFs, 4 contracts, ground_truth.json
 data/extracted/               15 cached extractions - the offline evidence
-tests/                        153 tests, all offline
+tests/                        161 tests, all offline
 ```
 
 Two layout decisions that are load-bearing:
