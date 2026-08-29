@@ -52,11 +52,6 @@ def configure_genai_backend() -> None:
 
 configure_genai_backend()
 
-#: Bucket holding raw invoice PDFs, addressed by content hash.
-RAW_INVOICE_BUCKET: str = os.environ.get(
-    "INVOICE_SENTINEL_BUCKET", f"{PROJECT_ID}-invoices-raw"
-)
-
 # --- Firestore collections ---------------------------------------------------
 
 COLLECTION_INVOICES: str = "invoices"       # canonical invoices, keyed by content_hash
