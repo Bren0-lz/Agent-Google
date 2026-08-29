@@ -41,6 +41,9 @@ param(
     # Gemini endpoint. Must stay 'global' for Gemini 3.x. See region rule above.
     [string] $ModelLocation = 'global',
 
+    # Bucket holding raw invoice PDFs. Must match config.RAW_INVOICE_BUCKET.
+    [string] $Bucket = 'agent-hackton-invoices-raw',
+
     # Deploy the ADK API server only (no developer web UI).
     [switch] $NoUi,
 
@@ -107,6 +110,36 @@ if ($EnableApis) {
         Write-Host "    enabling $Api"
         gcloud services enable $Api --project $ProjectId --quiet
         if ($LASTEXITCODE -ne 0) { throw "Failed to enable $Api" }
+    }
+
+    # The raw-invoice bucket. Uniform access because per-object ACLs are a
+    # liability on a bucket holding customer billing documents.
+    Write-Step "Creating the raw invoice bucket (skipped if it exists)"
+    $Existing = gcloud storage buckets list --project $ProjectId --format 'value(name)'
+    if ($Existing -notcontains $Bucket) {
+        gcloud storage buckets create "gs://$Bucket" --project $ProjectId `
+            --location $Region --uniform-bucket-level-access
+        if ($LASTEXITCODE -ne 0) { throw "Failed to create gs://$Bucket" }
+    } else {
+        Write-Host "    gs://$Bucket already exists"
+    }
+
+    # Composite indexes, from the committed firestore.indexes.json rather than
+    # from the link Firestore prints in an error. An index that only exists
+    # because someone clicked a console link is not a reproducible setup - and
+    # get_usage_history fails outright without this one.
+    Write-Step 'Creating Firestore composite indexes (async, a few minutes)'
+    $IndexFile = Join-Path $RepoRoot 'firestore.indexes.json'
+    foreach ($Index in (Get-Content $IndexFile -Raw | ConvertFrom-Json).indexes) {
+        $FieldArgs = $Index.fields | ForEach-Object {
+            "--field-config=field-path=$($_.fieldPath),order=$($_.order.ToLower())"
+        }
+        Write-Host "    $($Index.collectionGroup): $(($Index.fields | ForEach-Object { $_.fieldPath }) -join ', ')"
+        gcloud firestore indexes composite create --project $ProjectId `
+            --database='(default)' --collection-group=$Index.collectionGroup `
+            @FieldArgs --async --quiet
+        # An index that already exists reports failure; that is not an error here.
+        if ($LASTEXITCODE -ne 0) { Write-Host '      (already exists or still building)' }
     }
 }
 

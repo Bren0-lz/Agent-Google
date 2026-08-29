@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "invoice.header.account_id", "order": "ASCENDING" },
+        { "fieldPath": "invoice.header.billing_period_end", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "anomalies",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "account_id", "order": "ASCENDING" },
+        { "fieldPath": "recovered_amount", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

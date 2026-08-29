@@ -1,0 +1,177 @@
+{
+  "provenance": {
+    "content_hash": "b0dcd97549f556e3dbddaaf59757288f121d270748e93f765dc18cca417352da",
+    "source_uri": "file:///C:/Users/breno/OneDrive/Documents/GitHub/Agent-Google/data/synthetic/invoices/ACC-BR-2087-2026-06.pdf",
+    "profile_key": "br-vantel-empresas",
+    "model_id": "gemini-3.5-flash",
+    "extracted_at": "2026-08-27T15:19:36.342445Z",
+    "attempts": 1,
+    "repair_notes": [],
+    "warnings": []
+  },
+  "invoice": {
+    "header": {
+      "carrier": "Vantel Empresas",
+      "account_id": "ACC-BR-2087",
+      "billing_period_start": "2026-06-01",
+      "billing_period_end": "2026-06-30",
+      "issue_date": "2026-07-01",
+      "due_date": "2026-07-10",
+      "currency": "BRL",
+      "total_amount": "524.99"
+    },
+    "service_lines": [
+      {
+        "line_id": "21987660201",
+        "label": "Recepção",
+        "plan_name": "Vantel Corp 50GB",
+        "assigned_to": null,
+        "status": "active"
+      },
+      {
+        "line_id": "21987660202",
+        "label": "Enfermagem",
+        "plan_name": "Vantel Corp 10GB",
+        "assigned_to": null,
+        "status": "active"
+      },
+      {
+        "line_id": "21987660203",
+        "label": "Plantão",
+        "plan_name": "Vantel Corp 10GB",
+        "assigned_to": null,
+        "status": "active"
+      },
+      {
+        "line_id": "21987660204",
+        "label": "Administração",
+        "plan_name": "Vantel Corp 5GB",
+        "assigned_to": null,
+        "status": "active"
+      }
+    ],
+    "charges": [
+      {
+        "line_id": "21987660201",
+        "category": "subscription",
+        "description": "Assinatura mensal — Vantel Corp 50GB",
+        "quantity": "1",
+        "unit_amount": "189.90",
+        "amount": "189.90",
+        "period": "2026-06"
+      },
+      {
+        "line_id": "21987660202",
+        "category": "subscription",
+        "description": "Assinatura mensal — Vantel Corp 10GB",
+        "quantity": "1",
+        "unit_amount": "94.90",
+        "amount": "94.90",
+        "period": "2026-06"
+      },
+      {
+        "line_id": "21987660203",
+        "category": "subscription",
+        "description": "Assinatura mensal — Vantel Corp 10GB",
+        "quantity": "1",
+        "unit_amount": "89.90",
+        "amount": "89.90",
+        "period": "2026-06"
+      },
+      {
+        "line_id": "21987660204",
+        "category": "subscription",
+        "description": "Assinatura mensal — Vantel Corp 5GB",
+        "quantity": "1",
+        "unit_amount": "59.90",
+        "amount": "59.90",
+        "period": "2026-06"
+      },
+      {
+        "line_id": null,
+        "category": "tax",
+        "description": "ICMS (20,00%)",
+        "quantity": "1",
+        "unit_amount": null,
+        "amount": "86.92",
+        "period": null
+      },
+      {
+        "line_id": null,
+        "category": "tax",
+        "description": "FUST (0,50%)",
+        "quantity": "1",
+        "unit_amount": null,
+        "amount": "2.17",
+        "period": null
+      },
+      {
+        "line_id": null,
+        "category": "tax",
+        "description": "FUNTTEL (0,30%)",
+        "quantity": "1",
+        "unit_amount": null,
+        "amount": "1.30",
+        "period": null
+      }
+    ],
+    "usage_records": [
+      {
+        "line_id": "21987660201",
+        "metric": "data_mb",
+        "included": "51200",
+        "consumed": "1075.2",
+        "overage": "0"
+      },
+      {
+        "line_id": "21987660201",
+        "metric": "voice_min",
+        "included": "1000",
+        "consumed": "602",
+        "overage": "0"
+      },
+      {
+        "line_id": "21987660202",
+        "metric": "data_mb",
+        "included": "10240",
+        "consumed": "7618.56",
+        "overage": "0"
+      },
+      {
+        "line_id": "21987660202",
+        "metric": "voice_min",
+        "included": "1000",
+        "consumed": "701",
+        "overage": "0"
+      },
+      {
+        "line_id": "21987660203",
+        "metric": "data_mb",
+        "included": "10240",
+        "consumed": "4311.04",
+        "overage": "0"
+      },
+      {
+        "line_id": "21987660203",
+        "metric": "voice_min",
+        "included": "1000",
+        "consumed": "708",
+        "overage": "0"
+      },
+      {
+        "line_id": "21987660204",
+        "metric": "data_mb",
+        "included": "5120",
+        "consumed": "2109.44",
+        "overage": "0"
+      },
+      {
+        "line_id": "21987660204",
+        "metric": "voice_min",
+        "included": "1000",
+        "consumed": "794",
+        "overage": "0"
+      }
+    ]
+  }
+}

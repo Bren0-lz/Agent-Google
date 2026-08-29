@@ -1,0 +1,186 @@
+{
+  "provenance": {
+    "content_hash": "bb072b925bc32ae4eb434c2128170b434fd3da2b4ef3ec048da7b58cee16c744",
+    "source_uri": "file:///C:/Users/breno/OneDrive/Documents/GitHub/Agent-Google/data/synthetic/invoices/ACC-US-77120-2026-04.pdf",
+    "profile_key": "us-northwind-wireless",
+    "model_id": "gemini-3.5-flash",
+    "extracted_at": "2026-08-27T15:21:19.190354Z",
+    "attempts": 1,
+    "repair_notes": [],
+    "warnings": []
+  },
+  "invoice": {
+    "header": {
+      "carrier": "Northwind Wireless",
+      "account_id": "ACC-US-77120",
+      "billing_period_start": "2026-04-01",
+      "billing_period_end": "2026-04-30",
+      "issue_date": "2026-05-01",
+      "due_date": "2026-05-10",
+      "currency": "USD",
+      "total_amount": "291.21"
+    },
+    "service_lines": [
+      {
+        "line_id": "2065550110",
+        "label": "Dispatch",
+        "plan_name": "Northwind Business 15GB",
+        "assigned_to": null,
+        "status": "active"
+      },
+      {
+        "line_id": "2065550111",
+        "label": "Yard Ops",
+        "plan_name": "Northwind Business 5GB",
+        "assigned_to": null,
+        "status": "active"
+      },
+      {
+        "line_id": "2065550112",
+        "label": "Driver Pool A",
+        "plan_name": "Northwind Business 5GB",
+        "assigned_to": null,
+        "status": "active"
+      },
+      {
+        "line_id": "2065550113",
+        "label": "Operations Lead",
+        "plan_name": "Northwind Business Unlimited",
+        "assigned_to": null,
+        "status": "active"
+      }
+    ],
+    "charges": [
+      {
+        "line_id": "2065550110",
+        "category": "subscription",
+        "description": "Monthly plan charge — Northwind Business 15GB",
+        "quantity": "1",
+        "unit_amount": "65.00",
+        "amount": "65.00",
+        "period": "2026-04"
+      },
+      {
+        "line_id": "2065550111",
+        "category": "subscription",
+        "description": "Monthly plan charge — Northwind Business 5GB",
+        "quantity": "1",
+        "unit_amount": "45.00",
+        "amount": "45.00",
+        "period": "2026-04"
+      },
+      {
+        "line_id": "2065550111",
+        "category": "addon",
+        "description": "International Roaming Pack",
+        "quantity": "1",
+        "unit_amount": "19.99",
+        "amount": "19.99",
+        "period": "2026-04"
+      },
+      {
+        "line_id": "2065550112",
+        "category": "subscription",
+        "description": "Monthly plan charge — Northwind Business 5GB",
+        "quantity": "1",
+        "unit_amount": "45.00",
+        "amount": "45.00",
+        "period": "2026-04"
+      },
+      {
+        "line_id": "2065550113",
+        "category": "subscription",
+        "description": "Monthly plan charge — Northwind Business Unlimited",
+        "quantity": "1",
+        "unit_amount": "85.00",
+        "amount": "85.00",
+        "period": "2026-04"
+      },
+      {
+        "line_id": null,
+        "category": "fee",
+        "description": "Federal Universal Service Fund (3.20%)",
+        "quantity": "1",
+        "unit_amount": null,
+        "amount": "8.32",
+        "period": null
+      },
+      {
+        "line_id": null,
+        "category": "fee",
+        "description": "Regulatory Recovery Fee",
+        "quantity": "1",
+        "unit_amount": null,
+        "amount": "6.00",
+        "period": null
+      },
+      {
+        "line_id": null,
+        "category": "tax",
+        "description": "State Sales Tax (6.50%)",
+        "quantity": "1",
+        "unit_amount": null,
+        "amount": "16.90",
+        "period": null
+      }
+    ],
+    "usage_records": [
+      {
+        "line_id": "2065550110",
+        "metric": "data_mb",
+        "included": "15360",
+        "consumed": "8622.08",
+        "overage": "0"
+      },
+      {
+        "line_id": "2065550110",
+        "metric": "voice_min",
+        "included": "2000",
+        "consumed": "1241",
+        "overage": "0"
+      },
+      {
+        "line_id": "2065550111",
+        "metric": "data_mb",
+        "included": "5120",
+        "consumed": "2703.36",
+        "overage": "0"
+      },
+      {
+        "line_id": "2065550111",
+        "metric": "voice_min",
+        "included": "2000",
+        "consumed": "811",
+        "overage": "0"
+      },
+      {
+        "line_id": "2065550112",
+        "metric": "data_mb",
+        "included": "5120",
+        "consumed": "2222.08",
+        "overage": "0"
+      },
+      {
+        "line_id": "2065550112",
+        "metric": "voice_min",
+        "included": "2000",
+        "consumed": "932",
+        "overage": "0"
+      },
+      {
+        "line_id": "2065550113",
+        "metric": "data_mb",
+        "included": "102400",
+        "consumed": "79636.48",
+        "overage": "0"
+      },
+      {
+        "line_id": "2065550113",
+        "metric": "voice_min",
+        "included": "5000",
+        "consumed": "809",
+        "overage": "0"
+      }
+    ]
+  }
+}

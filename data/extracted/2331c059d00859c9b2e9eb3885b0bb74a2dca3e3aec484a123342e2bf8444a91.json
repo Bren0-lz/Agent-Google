@@ -1,0 +1,216 @@
+{
+  "provenance": {
+    "content_hash": "2331c059d00859c9b2e9eb3885b0bb74a2dca3e3aec484a123342e2bf8444a91",
+    "source_uri": "file:///C:/Users/breno/OneDrive/Documents/GitHub/Agent-Google/data/synthetic/invoices/ACC-BR-1041-2026-07.pdf",
+    "profile_key": "br-vantel-empresas",
+    "model_id": "gemini-3.5-flash",
+    "extracted_at": "2026-08-27T15:18:20.702729Z",
+    "attempts": 1,
+    "repair_notes": [],
+    "warnings": []
+  },
+  "invoice": {
+    "header": {
+      "carrier": "Vantel Empresas",
+      "account_id": "ACC-BR-1041",
+      "billing_period_start": "2026-07-01",
+      "billing_period_end": "2026-07-31",
+      "issue_date": "2026-08-01",
+      "due_date": "2026-08-10",
+      "currency": "BRL",
+      "total_amount": "631.52"
+    },
+    "service_lines": [
+      {
+        "line_id": "11987650101",
+        "label": "Operação 01",
+        "plan_name": "Vantel Corp 10GB",
+        "assigned_to": null,
+        "status": "active"
+      },
+      {
+        "line_id": "11987650102",
+        "label": "Operação 02",
+        "plan_name": "Vantel Corp 10GB",
+        "assigned_to": null,
+        "status": "active"
+      },
+      {
+        "line_id": "11987650103",
+        "label": "Reserva Frota",
+        "plan_name": "Vantel Corp 5GB",
+        "assigned_to": null,
+        "status": "active"
+      },
+      {
+        "line_id": "11987650104",
+        "label": "Diretoria",
+        "plan_name": "Vantel Corp 20GB",
+        "assigned_to": null,
+        "status": "active"
+      },
+      {
+        "line_id": "11987650105",
+        "label": "Operação 05",
+        "plan_name": "Vantel Corp 5GB",
+        "assigned_to": null,
+        "status": "active"
+      }
+    ],
+    "charges": [
+      {
+        "line_id": "11987650101",
+        "category": "subscription",
+        "description": "Assinatura mensal — Vantel Corp 10GB",
+        "quantity": "1",
+        "unit_amount": "89.90",
+        "amount": "89.90",
+        "period": "2026-07"
+      },
+      {
+        "line_id": "11987650102",
+        "category": "subscription",
+        "description": "Assinatura mensal — Vantel Corp 10GB",
+        "quantity": "1",
+        "unit_amount": "89.90",
+        "amount": "89.90",
+        "period": "2026-07"
+      },
+      {
+        "line_id": "11987650102",
+        "category": "usage",
+        "description": "Excedente de dados (4664 MB)",
+        "quantity": "4664",
+        "unit_amount": "0.02",
+        "amount": "93.28",
+        "period": "2026-07"
+      },
+      {
+        "line_id": "11987650103",
+        "category": "subscription",
+        "description": "Assinatura mensal — Vantel Corp 5GB",
+        "quantity": "1",
+        "unit_amount": "59.90",
+        "amount": "59.90",
+        "period": "2026-07"
+      },
+      {
+        "line_id": "11987650104",
+        "category": "subscription",
+        "description": "Assinatura mensal — Vantel Corp 20GB",
+        "quantity": "1",
+        "unit_amount": "129.90",
+        "amount": "129.90",
+        "period": "2026-07"
+      },
+      {
+        "line_id": "11987650105",
+        "category": "subscription",
+        "description": "Assinatura mensal — Vantel Corp 5GB",
+        "quantity": "1",
+        "unit_amount": "59.90",
+        "amount": "59.90",
+        "period": "2026-07"
+      },
+      {
+        "line_id": null,
+        "category": "tax",
+        "description": "ICMS (20,00%)",
+        "quantity": "1",
+        "unit_amount": null,
+        "amount": "104.56",
+        "period": null
+      },
+      {
+        "line_id": null,
+        "category": "tax",
+        "description": "FUST (0,50%)",
+        "quantity": "1",
+        "unit_amount": null,
+        "amount": "2.61",
+        "period": null
+      },
+      {
+        "line_id": null,
+        "category": "tax",
+        "description": "FUNTTEL (0,30%)",
+        "quantity": "1",
+        "unit_amount": null,
+        "amount": "1.57",
+        "period": null
+      }
+    ],
+    "usage_records": [
+      {
+        "line_id": "11987650101",
+        "metric": "data_mb",
+        "included": "10240",
+        "consumed": "3840",
+        "overage": "0"
+      },
+      {
+        "line_id": "11987650101",
+        "metric": "voice_min",
+        "included": "1000",
+        "consumed": "116",
+        "overage": "0"
+      },
+      {
+        "line_id": "11987650102",
+        "metric": "data_mb",
+        "included": "10240",
+        "consumed": "14899.2",
+        "overage": "4659.2"
+      },
+      {
+        "line_id": "11987650102",
+        "metric": "voice_min",
+        "included": "1000",
+        "consumed": "569",
+        "overage": "0"
+      },
+      {
+        "line_id": "11987650103",
+        "metric": "data_mb",
+        "included": "5120",
+        "consumed": "0",
+        "overage": "0"
+      },
+      {
+        "line_id": "11987650103",
+        "metric": "voice_min",
+        "included": "1000",
+        "consumed": "5",
+        "overage": "0"
+      },
+      {
+        "line_id": "11987650104",
+        "metric": "data_mb",
+        "included": "20480",
+        "consumed": "11243.52",
+        "overage": "0"
+      },
+      {
+        "line_id": "11987650104",
+        "metric": "voice_min",
+        "included": "1000",
+        "consumed": "234",
+        "overage": "0"
+      },
+      {
+        "line_id": "11987650105",
+        "metric": "data_mb",
+        "included": "5120",
+        "consumed": "2652.16",
+        "overage": "0"
+      },
+      {
+        "line_id": "11987650105",
+        "metric": "voice_min",
+        "included": "1000",
+        "consumed": "522",
+        "overage": "0"
+      }
+    ]
+  }
+}

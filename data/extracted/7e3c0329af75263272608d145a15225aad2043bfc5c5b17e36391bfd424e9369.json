@@ -1,0 +1,156 @@
+{
+  "provenance": {
+    "content_hash": "7e3c0329af75263272608d145a15225aad2043bfc5c5b17e36391bfd424e9369",
+    "source_uri": "file:///C:/Users/breno/OneDrive/Documents/GitHub/Agent-Google/data/synthetic/invoices/ACC-BR-3312-2026-07.pdf",
+    "profile_key": "br-vantel-empresas",
+    "model_id": "gemini-3.5-flash",
+    "extracted_at": "2026-08-27T15:20:54.306137Z",
+    "attempts": 1,
+    "repair_notes": [],
+    "warnings": []
+  },
+  "invoice": {
+    "header": {
+      "carrier": "Vantel Empresas",
+      "account_id": "ACC-BR-3312",
+      "billing_period_start": "2026-07-01",
+      "billing_period_end": "2026-07-31",
+      "issue_date": "2026-08-01",
+      "due_date": "2026-08-10",
+      "currency": "BRL",
+      "total_amount": "278.68"
+    },
+    "service_lines": [
+      {
+        "line_id": "31987670301",
+        "label": "Sócio 01",
+        "plan_name": "Vantel Corp 10GB",
+        "assigned_to": null,
+        "status": "active"
+      },
+      {
+        "line_id": "31987670302",
+        "label": "Sócio 02",
+        "plan_name": "Vantel Corp 10GB",
+        "assigned_to": null,
+        "status": "active"
+      },
+      {
+        "line_id": "31987670303",
+        "label": "Secretaria",
+        "plan_name": "Vantel Corp 5GB",
+        "assigned_to": null,
+        "status": "active"
+      }
+    ],
+    "charges": [
+      {
+        "line_id": "31987670301",
+        "category": "subscription",
+        "description": "Assinatura mensal — Vantel Corp 10GB",
+        "quantity": "1",
+        "unit_amount": "89.90",
+        "amount": "89.90",
+        "period": "2026-07"
+      },
+      {
+        "line_id": "31987670302",
+        "category": "subscription",
+        "description": "Assinatura mensal — Vantel Corp 10GB",
+        "quantity": "1",
+        "unit_amount": "89.90",
+        "amount": "89.90",
+        "period": "2026-07"
+      },
+      {
+        "line_id": "31987670302",
+        "category": "discount",
+        "description": "Desconto fidelidade 12 meses",
+        "quantity": "1",
+        "unit_amount": null,
+        "amount": "-9.00",
+        "period": "2026-07"
+      },
+      {
+        "line_id": "31987670303",
+        "category": "subscription",
+        "description": "Assinatura mensal — Vantel Corp 5GB",
+        "quantity": "1",
+        "unit_amount": "59.90",
+        "amount": "59.90",
+        "period": "2026-07"
+      },
+      {
+        "line_id": null,
+        "category": "tax",
+        "description": "ICMS (20,00%)",
+        "quantity": "1",
+        "unit_amount": null,
+        "amount": "46.14",
+        "period": null
+      },
+      {
+        "line_id": null,
+        "category": "tax",
+        "description": "FUST (0,50%)",
+        "quantity": "1",
+        "unit_amount": null,
+        "amount": "1.15",
+        "period": null
+      },
+      {
+        "line_id": null,
+        "category": "tax",
+        "description": "FUNTTEL (0,30%)",
+        "quantity": "1",
+        "unit_amount": null,
+        "amount": "0.69",
+        "period": null
+      }
+    ],
+    "usage_records": [
+      {
+        "line_id": "31987670301",
+        "metric": "data_mb",
+        "included": "10240",
+        "consumed": "7690.24",
+        "overage": "0"
+      },
+      {
+        "line_id": "31987670301",
+        "metric": "voice_min",
+        "included": "1000",
+        "consumed": "442",
+        "overage": "0"
+      },
+      {
+        "line_id": "31987670302",
+        "metric": "data_mb",
+        "included": "10240",
+        "consumed": "5048.32",
+        "overage": "0"
+      },
+      {
+        "line_id": "31987670302",
+        "metric": "voice_min",
+        "included": "1000",
+        "consumed": "133",
+        "overage": "0"
+      },
+      {
+        "line_id": "31987670303",
+        "metric": "data_mb",
+        "included": "5120",
+        "consumed": "3440.64",
+        "overage": "0"
+      },
+      {
+        "line_id": "31987670303",
+        "metric": "voice_min",
+        "included": "1000",
+        "consumed": "117",
+        "overage": "0"
+      }
+    ]
+  }
+}

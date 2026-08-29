@@ -34,6 +34,7 @@ from typing import Any
 from invoice_sentinel.extractor import ExtractionFailed, InvoiceSource, extract_invoice
 from invoice_sentinel.profiles import profile_for
 from invoice_sentinel.schema import CanonicalInvoice
+from scripts import extraction_cache
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DATASET = REPO_ROOT / "data" / "synthetic"
@@ -172,25 +173,41 @@ def leaf_count(node: Any) -> int:
 # --- Runner ------------------------------------------------------------------
 
 
-def evaluate_one(entry: dict, account: dict, *, persist: bool) -> dict:
+def evaluate_one(
+    entry: dict,
+    account: dict,
+    *,
+    persist: bool,
+    cache_dir: Path | None = None,
+    refresh: bool = False,
+) -> dict:
     profile = profile_for(account["profile_key"])
     source = InvoiceSource.from_path(DATASET / entry["file"])
 
     started = time.monotonic()
-    try:
-        canonical = extract_invoice(source, profile)
-    except ExtractionFailed as failure:
-        return {
-            "file": entry["file"],
-            "account_id": account["account_id"],
-            "country": account["country"],
-            "valid": False,
-            "attempts": failure.attempts,
-            "error": failure.repair_notes[-1] if failure.repair_notes else str(failure),
-            "seconds": round(time.monotonic() - started, 2),
-        }
+    cached = None
+    if cache_dir is not None and not refresh:
+        cached = extraction_cache.load(cache_dir, entry["content_hash"])
 
-    elapsed = round(time.monotonic() - started, 2)
+    if cached is not None:
+        canonical = cached
+        elapsed = 0.0
+    else:
+        try:
+            canonical = extract_invoice(source, profile)
+        except ExtractionFailed as failure:
+            return {
+                "file": entry["file"],
+                "account_id": account["account_id"],
+                "country": account["country"],
+                "valid": False,
+                "attempts": failure.attempts,
+                "error": failure.repair_notes[-1] if failure.repair_notes else str(failure),
+                "seconds": round(time.monotonic() - started, 2),
+            }
+        elapsed = round(time.monotonic() - started, 2)
+        if cache_dir is not None:
+            extraction_cache.save(cache_dir, canonical)
 
     if persist:
         from invoice_sentinel import store
@@ -225,6 +242,7 @@ def evaluate_one(entry: dict, account: dict, *, persist: bool) -> dict:
         ],
         "created": created,
         "seconds": elapsed,
+        "from_cache": cached is not None,
     }
 
 
@@ -241,6 +259,17 @@ def main() -> int:
     parser.add_argument("--profile", help="Profile key, required with --gcs")
     parser.add_argument("--persist", action="store_true", help="Write results to Firestore")
     parser.add_argument("--report", type=Path, help="Write the full JSON report here")
+    parser.add_argument(
+        "--cache",
+        type=Path,
+        help="Reuse extractions stored here, and store any new ones. Downstream "
+        "work (rules, auditor, dispute writer) can then iterate for free.",
+    )
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Re-extract even when cached, e.g. after changing the prompt",
+    )
     args = parser.parse_args()
 
     if args.gcs:
@@ -258,12 +287,19 @@ def main() -> int:
             if args.limit and len(results) >= args.limit:
                 break
             print(f"  {entry['file']} ... ", end="", flush=True)
-            result = evaluate_one(entry, account, persist=args.persist)
+            result = evaluate_one(
+                entry,
+                account,
+                persist=args.persist,
+                cache_dir=args.cache,
+                refresh=args.refresh,
+            )
             results.append(result)
             if result["valid"]:
+                origin = "cached" if result["from_cache"] else f"{result['seconds']}s"
                 print(
                     f"ok  {result['accuracy']:.1%} fields  "
-                    f"({result['attempts']} call(s), {result['seconds']}s)"
+                    f"({result['attempts']} call(s), {origin})"
                 )
             else:
                 print(f"FAILED after {result['attempts']} call(s)")

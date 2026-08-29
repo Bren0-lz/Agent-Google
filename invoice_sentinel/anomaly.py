@@ -42,6 +42,40 @@ class AnomalyType(str, Enum):
     RATE_DRIFT = "rate_drift"
 
 
+class Remedy(str, Enum):
+    """What kind of action a finding calls for.
+
+    The distinction is not cosmetic, and getting it wrong is how a consultancy
+    loses credibility with a carrier. A dormant line, an oversized plan and a
+    chronic overage were all billed exactly as contracted - the carrier owes
+    nothing, and the money is being wasted by the customer's own configuration.
+    An unentitled add-on and a drifted rate are charges the carrier should not
+    have made at all.
+
+    Sending a carrier a letter demanding a refund for a plan the customer chose
+    invites a flat rejection, and it puts the two genuine claims in the same
+    envelope as three that will be dismissed.
+    """
+
+    #: The carrier billed something it had no right to. Contest it.
+    DISPUTE = "dispute"
+
+    #: The carrier billed correctly. The customer should change the plan.
+    OPTIMISE = "optimise"
+
+
+#: Which findings are the carrier's fault. Everything else is the customer's
+#: own configuration costing them money.
+CARRIER_ERRORS: frozenset[AnomalyType] = frozenset(
+    {AnomalyType.ORPHAN_ADDON, AnomalyType.RATE_DRIFT}
+)
+
+
+def remedy_for(anomaly_type: AnomalyType) -> Remedy:
+    """Whether this kind of finding is contested or acted on internally."""
+    return Remedy.DISPUTE if anomaly_type in CARRIER_ERRORS else Remedy.OPTIMISE
+
+
 class Evidence(BaseModel):
     """One verifiable fact supporting a finding.
 
@@ -89,6 +123,11 @@ class Anomaly(BaseModel):
 
     #: Set by the auditor, from config.ESCALATION_CONFIDENCE_THRESHOLD.
     needs_human_review: bool = False
+
+    @property
+    def remedy(self) -> Remedy:
+        """Contest this with the carrier, or fix it on the account?"""
+        return remedy_for(self.type)
 
     def monthly_amount(self) -> Decimal:
         """Recurring exposure per cycle — what the dispute stops going forward."""

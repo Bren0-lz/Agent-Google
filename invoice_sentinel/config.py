@@ -29,6 +29,29 @@ MODEL_LOCATION: str = os.environ.get("GOOGLE_CLOUD_LOCATION", "global")
 #: Where Cloud Run, Firestore, GCS and Pub/Sub live.
 INFRA_REGION: str = os.environ.get("INVOICE_SENTINEL_REGION", "us-central1")
 
+
+def configure_genai_backend() -> None:
+    """Make the ADK's implicit client agree with the settings above.
+
+    The extractor builds its Vertex client explicitly, but an ADK LlmAgent
+    constructs its own from GOOGLE_GENAI_USE_VERTEXAI, GOOGLE_CLOUD_PROJECT and
+    GOOGLE_CLOUD_LOCATION. When those are unset the SDK falls back to the Gemini
+    API and asks for an API key - so the same code would reach Vertex from the
+    extractor and the public endpoint from the auditor, which is a confusing
+    failure to debug and an easy one to ship.
+
+    deploy.ps1 sets all three on the container. This makes a local `adk web`,
+    a test run and the container behave identically without a .env file that
+    does not travel. Existing values always win: this fills gaps, it does not
+    override an operator.
+    """
+    os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "TRUE")
+    os.environ.setdefault("GOOGLE_CLOUD_PROJECT", PROJECT_ID)
+    os.environ.setdefault("GOOGLE_CLOUD_LOCATION", MODEL_LOCATION)
+
+
+configure_genai_backend()
+
 #: Bucket holding raw invoice PDFs, addressed by content hash.
 RAW_INVOICE_BUCKET: str = os.environ.get(
     "INVOICE_SENTINEL_BUCKET", f"{PROJECT_ID}-invoices-raw"
@@ -40,6 +63,7 @@ COLLECTION_INVOICES: str = "invoices"       # canonical invoices, keyed by conte
 COLLECTION_ANOMALIES: str = "anomalies"     # findings produced by the rule engine
 COLLECTION_CONTRACTS: str = "contracts"     # contracted plans, per account
 COLLECTION_REVIEWS: str = "review_queue"    # low-confidence findings for a human
+COLLECTION_DISPUTES: str = "disputes"       # letters drafted for the carrier
 
 # --- Agent behaviour ---------------------------------------------------------
 

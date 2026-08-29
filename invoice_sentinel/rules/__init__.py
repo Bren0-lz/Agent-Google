@@ -67,15 +67,15 @@ def _suppress_redundant(findings: list[Anomaly]) -> list[Anomaly]:
     ]
 
 
-def run_all_rules(ctx: AuditContext) -> list[Anomaly]:
-    """Every rule, deduplicated, ranked by money, flagged for review where unsure.
+def finalise_findings(findings: list[Anomaly]) -> list[Anomaly]:
+    """Deduplicate, flag for review, rank by money.
 
-    Returned highest-recovery first, because that is the order a human reviewer
-    and a dispute letter both want.
+    Split out of run_all_rules because the auditor runs the families
+    concurrently and merges them afterwards, and it has to reach the same
+    conclusions as a single-threaded run. Suppression in particular is
+    cross-rule: whoever assembles a set of findings has to apply it, or the same
+    money gets claimed twice.
     """
-    findings = [
-        anomaly for family in RULE_FAMILIES for anomaly in run_rule_family(family, ctx)
-    ]
     findings = _suppress_redundant(findings)
 
     for anomaly in findings:
@@ -85,12 +85,24 @@ def run_all_rules(ctx: AuditContext) -> list[Anomaly]:
     return findings
 
 
+def run_all_rules(ctx: AuditContext) -> list[Anomaly]:
+    """Every rule, deduplicated, ranked by money, flagged for review where unsure.
+
+    Returned highest-recovery first, because that is the order a human reviewer
+    and a dispute letter both want.
+    """
+    return finalise_findings(
+        [anomaly for family in RULE_FAMILIES for anomaly in run_rule_family(family, ctx)]
+    )
+
+
 __all__ = [
     "ALL_RULES",
     "RULE_FAMILIES",
     "AuditContext",
     "Rule",
     "chronic_overage",
+    "finalise_findings",
     "money",
     "orphan_addon",
     "plan_tier_mismatch",
