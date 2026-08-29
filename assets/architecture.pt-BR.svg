@@ -61,6 +61,7 @@
   <!-- ===== Cloud Run boundary ===== -->
   <rect class="grp" x="32" y="92" width="1308" height="740"/>
   <text class="ms"  x="44" y="110">Cloud Run  /  root SequentialAgent</text>
+  <text class="ms"  x="420" y="110">intake  .  um PDF anexado a mensagem, ou source_uri definido via HTTP  .  um contrato assinado e arquivado na primeira vez</text>
 
   <!-- ===== stage 1 ===== -->
   <text class="st" x="44" y="132">1   EXTRAIR</text>
@@ -68,7 +69,7 @@
   <rect class="bl"  x="44" y="142" width="280" height="52"/>
   <text class="tag" x="312" y="158" text-anchor="end">LLM</text>
   <text class="m"   x="56" y="166">invoice_extractor</text>
-  <text class="ms"  x="56" y="183">pdf -&gt; ExtractedInvoice</text>
+  <text class="ms"  x="56" y="183">anexo ou gs:// -&gt; ExtractedInvoice</text>
 
   <line class="hair" x1="324" y1="168" x2="340" y2="168"/>
   <text class="ms" x="348" y="160">ValidationError -&gt; novo prompt, max 2</text>

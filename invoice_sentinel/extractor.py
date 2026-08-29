@@ -20,9 +20,10 @@ import dataclasses
 import datetime
 import pathlib
 import time
+from typing import TypeVar
 
 from google.genai import Client, errors, types
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from . import config
 from .schema import (
@@ -34,6 +35,20 @@ from .schema import (
 )
 
 PDF_MIME_TYPE = "application/pdf"
+
+
+class BudgetExhausted(RuntimeError):
+    """The repair budget ran out inside generate_validated.
+
+    Internal to the extraction machinery: every caller catches it and re-raises
+    the failure its own callers know how to handle, so that a diagnosis always
+    names the document that could not be read.
+    """
+
+    def __init__(self, attempts: int, repair_notes: list[str]) -> None:
+        super().__init__(f"schema never satisfied after {attempts} attempt(s)")
+        self.attempts = attempts
+        self.repair_notes = repair_notes
 
 
 class ExtractionFailed(RuntimeError):
@@ -84,6 +99,26 @@ class InvoiceSource:
         if not gs_uri.startswith("gs://"):
             raise ValueError(f"not a Cloud Storage URI: {gs_uri!r}")
         return cls(uri=gs_uri)
+
+    @classmethod
+    def from_bytes(cls, data: bytes, *, name: str | None = None) -> "InvoiceSource":
+        """A PDF that arrived in the conversation rather than from storage.
+
+        Someone dropping their own invoice into the chat has no bucket and no
+        path, so the URI is synthesised from the bytes: `upload://<sha256>/<name>`.
+        Deriving it from the content rather than from the filename keeps the two
+        promises that the stored ones make. The hash is the same hash
+        content_hash() computes, so save_invoice() still refuses a duplicate by
+        key rather than by check; and provenance still names something stable,
+        because two people uploading the same PDF under different filenames
+        produce the same URI.
+
+        The bytes are carried, not fetched later: nothing outside this object
+        holds them.
+        """
+        digest = content_hash(data)
+        suffix = f"/{name}" if name else ""
+        return cls(uri=f"upload://{digest}{suffix}", _data=data)
 
     @classmethod
     def resolve(cls, location: str | pathlib.Path) -> "InvoiceSource":
@@ -191,7 +226,7 @@ def repair_prompt(error: ValidationError) -> str:
     )
     return (
         "Your previous response did not match the schema. Fix exactly these "
-        "problems and return the corrected JSON for the same invoice:\n"
+        "problems and return the corrected JSON for the same document:\n"
         f"{complaints}\n"
         "Change nothing else. Do not re-read values that were already correct."
     )
@@ -253,6 +288,64 @@ def _default_client() -> Client:
     )
 
 
+Document = TypeVar("Document", bound=BaseModel)
+
+
+def generate_validated(
+    client: Client,
+    model_id: str,
+    contents: list[types.Content],
+    generate_config: types.GenerateContentConfig,
+    schema: type[Document],
+    *,
+    budget: int,
+    retries: int,
+) -> tuple[Document, int, list[str]]:
+    """Ask until the answer validates, or until the repair budget runs out.
+
+    Returns the parsed document, how many calls it took, and every rejection
+    along the way. The caller decides what a failure means - extract_invoice
+    raises ExtractionFailed, the contract extractor raises its own - because the
+    two carry different diagnoses to different places.
+
+    Lives here rather than in the contract extractor because re-prompting on a
+    schema violation is the same operation for any document: show the model what
+    it said, name what was wrong with it, ask again. Duplicating it would let
+    the two drift, and the invoice path is the one with the eval behind it.
+    """
+    repair_notes: list[str] = []
+    attempts = 0
+
+    while True:
+        attempts += 1
+        payload = _call_model(
+            client,
+            model_id,
+            contents,
+            generate_config,
+            retries=retries,
+            backoff=config.TRANSIENT_RETRY_BACKOFF,
+        )
+
+        try:
+            return schema.model_validate_json(payload), attempts, repair_notes
+        except ValidationError as error:
+            repair_notes.append(str(error))
+            if len(repair_notes) > budget:
+                raise BudgetExhausted(attempts, repair_notes) from error
+            # Keep the rejected answer in the conversation: the model has to see
+            # what it said in order to correct it rather than start over.
+            contents.append(
+                types.Content(role="model", parts=[types.Part.from_text(text=payload)])
+            )
+            contents.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=repair_prompt(error))],
+                )
+            )
+
+
 def extract_invoice(
     source: InvoiceSource,
     profile: ExtractionProfile,
@@ -302,40 +395,20 @@ def extract_invoice(
         )
     ]
 
-    repair_notes: list[str] = []
-    attempts = 0
-
-    while True:
-        attempts += 1
-        payload = _call_model(
+    try:
+        invoice, attempts, repair_notes = generate_validated(
             client,
             model_id,
             contents,
             generate_config,
+            ExtractedInvoice,
+            budget=budget,
             retries=retries,
-            backoff=config.TRANSIENT_RETRY_BACKOFF,
         )
-
-        try:
-            invoice = ExtractedInvoice.model_validate_json(payload)
-        except ValidationError as error:
-            repair_notes.append(str(error))
-            if len(repair_notes) > budget:
-                raise ExtractionFailed(source.uri, attempts, repair_notes) from error
-            # Keep the rejected answer in the conversation: the model has to see
-            # what it said in order to correct it rather than start over.
-            contents.append(
-                types.Content(role="model", parts=[types.Part.from_text(text=payload)])
-            )
-            contents.append(
-                types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(text=repair_prompt(error))],
-                )
-            )
-            continue
-
-        break
+    except BudgetExhausted as exhausted:
+        raise ExtractionFailed(
+            source.uri, exhausted.attempts, exhausted.repair_notes
+        ) from exhausted
 
     return CanonicalInvoice(
         # Every field here is computed, never generated. A hash, a timestamp and

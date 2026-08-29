@@ -10,6 +10,7 @@ State contract, so the SequentialAgent assembled on Day 2 has something stable
 to build against:
 
     in    source_uri      file:// or gs:// location of the invoice PDF
+    in    (attachment)    a PDF on the message itself, when no source_uri is set
     in    profile_key     carrier profile; defaults to config.DEFAULT_PROFILE_KEY
     out   canonical_invoice   the CanonicalInvoice, as JSON-safe dict
     out   content_hash        Firestore document id of that record
@@ -27,6 +28,7 @@ from google.genai import types
 
 from . import config, store
 from .extractor import ExtractionFailed, InvoiceSource, extract_invoice
+from .intake import split_attachments
 from .profiles import profile_for
 
 
@@ -40,13 +42,14 @@ class ExtractorAgent(BaseAgent):
     ) -> AsyncGenerator[Event, None]:
         state = ctx.session.state
 
-        location = state.get("source_uri")
-        if not location:
-            yield self._say(ctx, "No source_uri in session state; nothing to extract.")
+        source = self._source(ctx, state)
+        if source is None:
+            # Nothing to work with. The intake stage has already said so, in
+            # terms the person can act on, so repeating "no source_uri" here
+            # would only add noise to a message that already explained itself.
             return
 
         profile = profile_for(state.get("profile_key") or config.DEFAULT_PROFILE_KEY)
-        source = InvoiceSource.resolve(location)
 
         try:
             canonical = extract_invoice(source, profile)
@@ -88,6 +91,29 @@ class ExtractorAgent(BaseAgent):
                 "extraction_created": created,
             },
         )
+
+    def _source(self, ctx: InvocationContext, state) -> InvoiceSource | None:
+        """Where this run's PDF comes from, or None if there is no PDF.
+
+        `source_uri` wins when set, because that is what a caller who built the
+        session deliberately asked for — the eval harness, the README's curl
+        flow and Pub/Sub ingestion all take that path, and none of them attach
+        anything to a message.
+
+        Otherwise the PDF came in on the conversation. The bytes are read from
+        the message rather than from state on purpose: state deltas are
+        serialised to JSON on the way out of /run, and bytes do not survive it.
+        """
+        location = state.get("source_uri")
+        if location:
+            return InvoiceSource.resolve(location)
+
+        _contracts, invoices = split_attachments(ctx.user_content)
+        if not invoices:
+            return None
+
+        attachment = invoices[0]
+        return InvoiceSource.from_bytes(attachment.data, name=attachment.name)
 
     def _say(
         self, ctx: InvocationContext, text: str, state_delta: dict | None = None

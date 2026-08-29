@@ -6,7 +6,7 @@
 [![Google ADK 2.7.1](https://img.shields.io/badge/Google%20ADK-2.7.1-34A853)](https://google.github.io/adk-docs/)
 [![Cloud Run](https://img.shields.io/badge/Cloud%20Run-deployed-4285F4)](https://cloud.google.com/run)
 [![Firestore](https://img.shields.io/badge/Firestore-native-FBBC04)](https://cloud.google.com/firestore)
-[![Tests](https://img.shields.io/badge/tests-94%20passing-34A853)](#a--zero-credentials-90-seconds)
+[![Tests](https://img.shields.io/badge/tests-132%20passing-34A853)](#a--zero-credentials-90-seconds)
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
 
 > **Live service:** https://invoice-sentinel-474711060457.us-central1.run.app
@@ -93,9 +93,16 @@ claim yourself in under two minutes.
 
 ![Architecture](assets/architecture.svg)
 
-Three stages call the model. Two of those are pure transcription and pure composition; the single
-place a model is asked to *decide* anything is `audit_judgment`, and it decides what to do with
-amounts it is structurally unable to author.
+Three stages call the model on an audit. Two of those are pure transcription and pure
+composition; the single place a model is asked to *decide* anything is `audit_judgment`, and it
+decides what to do with amounts it is structurally unable to author. (A fourth call exists but
+runs at most once per account: `contract_extractor` transcribes a signed contract the first time
+somebody sends one.)
+
+Ahead of all of it sits `intake`, which is deliberately **not** an `LlmAgent`. Deciding whether
+an attachment is a contract or a bill, and which carrier was named, is pattern matching — a model
+call whose only job is to route would be tokens spent on nothing, the same reasoning that keeps
+the rule families deterministic.
 
 The two paths worth tracing first are the ones that do **not** end in a document.
 `escalate_for_review()` puts a finding the agent is not confident about into `review_queue` for a
@@ -186,7 +193,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-**94 tests, fully offline.** No Google Cloud project, no API key, no billing. This includes
+**132 tests, fully offline.** No Google Cloud project, no API key, no billing. This includes
 `test_extracted_audit.py`, which replays the committed extractions in `data/extracted/` through the
 real rule engine and asserts the exact recovery figures — the end-to-end claim, verified without
 spending a token.
@@ -259,6 +266,44 @@ python -m scripts.seed_firestore
 adk web invoice_sentinel
 ```
 
+---
+
+## Auditing your own invoice
+
+Everything above audits the synthetic dataset. To audit a bill of your own, open the agent
+and **attach the PDF to the message**. No bucket, no `curl`, no seeding.
+
+```
+[attach fatura-julho.pdf]  "vantel"
+```
+
+That is the whole interaction. The `intake` stage reads the attachment, hands it to the
+extractor with the profile you named, and the rest of the graph runs exactly as it does for
+the dataset.
+
+Two things it will tell you rather than guess about:
+
+**It audits against a signed contract.** An invoice on its own cannot be wrong — it can only
+disagree with something. If the account is new, attach the contract too and say `contract`:
+Gemini transcribes it into the same `Contract` schema `seed_firestore` writes, it is filed
+under the account id, and every invoice you send afterwards is audited against it. Note what
+this does *not* change: the contracted rates become an input the rule engine compares
+against, in `Decimal`, in pure Python. No figure in a dispute letter has ever been quoted
+from a model, and that is still true here.
+
+**One invoice is already enough to find money.** `orphan_addon` and `rate_drift` — the two
+`dispute` rules, the ones where the carrier owes you — need only the contract and the bill
+in front of them. The three `optimise` rules claim a *pattern*, so they stay quiet until the
+account has `PATTERN_CYCLES` (3) consecutive cycles on file. Send three months and the plan
+sizing findings light up on their own.
+
+> ⚠️ **Only two carriers are supported today**: `br-vantel-empresas` and
+> `us-northwind-wireless`. A bill from Vivo, Claro or AT&T will be **refused**, not guessed
+> at — `profile_for()` raises on an unknown key rather than reading a Brazilian invoice with
+> American separator hints, which produces plausible, wrong numbers that nothing downstream
+> would catch. A new carrier is a new entry in [`profiles.py`](invoice_sentinel/profiles.py)
+> and nothing else.
+
 ### Driving the deployed API directly
 
 ```bash
@@ -293,7 +338,9 @@ invoice_sentinel/
   contract.py                 the contracted truth
   anomaly.py                  AnomalyType, Remedy, Evidence, Anomaly
   profiles.py                 carrier extraction profiles
+  intake.py                   reads what the person attached; the way in
   extractor.py                source resolution, prompt, repair loop, transient retry
+  contract_extractor.py       a signed contract PDF -> Contract
   extractor_agent.py          ADK shell around the extractor
   store.py                    Firestore: invoices, contracts, anomalies, reviews, disputes
   audit_tools.py              the auditor's tools + state keys
@@ -313,7 +360,7 @@ scripts/                      dev-only; never enters the container
 
 data/synthetic/               15 PDFs, 4 contracts, ground_truth.json
 data/extracted/               15 cached extractions - the offline evidence
-tests/                        94 tests, all offline
+tests/                        132 tests, all offline
 ```
 
 Two layout decisions that are load-bearing:
