@@ -6,7 +6,7 @@
 [![Google ADK 2.7.1](https://img.shields.io/badge/Google%20ADK-2.7.1-34A853)](https://google.github.io/adk-docs/)
 [![Cloud Run](https://img.shields.io/badge/Cloud%20Run-deployed-4285F4)](https://cloud.google.com/run)
 [![Firestore](https://img.shields.io/badge/Firestore-native-FBBC04)](https://cloud.google.com/firestore)
-[![Tests](https://img.shields.io/badge/tests-151%20passing-34A853)](#a--zero-credentials-90-seconds)
+[![Tests](https://img.shields.io/badge/tests-153%20passing-34A853)](#a--zero-credentials-90-seconds)
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
 
 > **Live service:** https://invoice-sentinel-474711060457.us-central1.run.app
@@ -168,10 +168,24 @@ prompt — it is domain truth, not model behaviour. And `flag_anomaly` **refuses
 
 ### 3. Knowing when it is unsure
 
-`escalate_for_review` fires when the agent sees something the rule engine cannot: no contract on
-file, extraction warnings touching the affected line, a line newer than the pattern being claimed,
-or confidence below `ESCALATION_CONFIDENCE_THRESHOLD` (0.75). An agent that knows when it is unsure
-demonstrates judgement; blind automation does not.
+`escalate_for_review` fires when the agent sees something the rule engine cannot: extraction
+warnings touching the affected line, a line newer than the pattern being claimed, or confidence
+below `ESCALATION_CONFIDENCE_THRESHOLD` (0.75). An agent that knows when it is unsure demonstrates
+judgement; blind automation does not.
+
+**Not knowing at all is a separate answer, and it needed separate machinery.** With no contract on
+file, three of the five rules are skipped, `list_findings` comes back empty, and there is nothing
+to escalate — `escalate_for_review` takes a `finding_id`, and a rule that never ran produces none.
+So the empty result branches on `get_contract` instead: findings *and* a contract means the invoice
+checks out; no contract means the agent says it could not audit it and asks for the document.
+
+> **How this one got found.** The deployed agent answered a brand-new account — the first thing
+> anyone tries — with *"the invoice looks clean"*. The test invoice was overcharged by 5.00, which
+> showed up the moment the contract was filed. Silence from a rule that never ran is not evidence
+> of a correct bill, and the one stage a reader is most likely to believe was reporting it as if it
+> were. The same mistake had already been fixed once for the *no invoice* case
+> ([`nothing_was_extracted`](invoice_sentinel/auditor.py)); the *no contract* case had been left out
+> of it.
 
 ---
 
@@ -193,7 +207,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-**151 tests, fully offline.** No Google Cloud project, no API key, no billing. This includes
+**153 tests, fully offline.** No Google Cloud project, no API key, no billing. This includes
 `test_extracted_audit.py`, which replays the committed extractions in `data/extracted/` through the
 real rule engine and asserts the exact recovery figures — the end-to-end claim, verified without
 spending a token.
@@ -226,25 +240,34 @@ python -m scripts.eval_audit      --ground-truth                     # isolate r
 
 ```powershell
 gcloud auth login
-.\deploy.ps1 -EnableApis      # first time: APIs + bucket + Firestore composite indexes
+.\deploy.ps1 -EnableApis      # first time: APIs + buckets + Firestore composite indexes
 .\deploy.ps1                  # every deploy after that
 ```
 
 `deploy.ps1` is the single source of truth for deployment and doubles as the spin-up instruction.
-Pass `-ProjectId`, `-Region`, `-ServiceName` or `-Bucket` to point it at your own project. With
-`-EnableApis` it:
+Pass `-ProjectId`, `-Region`, `-ServiceName`, `-Bucket` or `-ArtifactBucket` to point it at your
+own project. With `-EnableApis` it:
 
 1. enables `aiplatform`, `run`, `firestore`, `pubsub`, `storage`, `secretmanager`, `cloudbuild`
    and `artifactregistry`;
 2. creates the raw-invoice bucket with uniform bucket-level access — per-object ACLs are a
    liability on a bucket holding customer billing documents;
-3. creates the Firestore composite indexes from the committed
+3. creates the artifact bucket, on the same terms and deliberately not the same bucket: one holds
+   documents the carrier issued, the other holds documents written on the customer's behalf, and
+   they do not belong under one retention or access story. It backs
+   `--artifact_service_uri`, without which the ADK falls back to an in-memory service and the
+   letter and summary vanish with the next revision;
+4. creates the Firestore composite indexes from the committed
    [`firestore.indexes.json`](firestore.indexes.json). `get_history` fails outright without the
    `account_id` + `billing_period_end` index, and an index that exists only because someone clicked
    a link in an error message is not a reproducible setup;
-4. deploys, then **verifies the deploy actually took** by comparing `latestCreatedRevisionName`
+5. deploys, then **verifies the deploy actually took** by comparing `latestCreatedRevisionName`
    against `latestReadyRevisionName`. `adk deploy` swallows a failing `gcloud run deploy` and still
    exits 0, which is how a container that dies on startup gets mistaken for a working deploy.
+
+Every deploy passes `--min-instances`, which defaults to **1**. A cold start on this image runs
+about 16 seconds, and the first click of a demo should not look like a hang; the cost is one idle
+Cloud Run instance. `-MinInstances 0` scales to zero instead.
 
 The container needs exactly three environment variables, which `deploy.ps1` sets via
 `--env-vars-file` — a local `.env` does **not** travel into the image:
@@ -281,10 +304,19 @@ That is the whole interaction. The `intake` stage reads the attachment, hands it
 extractor with the profile you named, and the rest of the graph runs exactly as it does for
 the dataset.
 
+**The two documents come back as attachments.** The carrier letter and the customer summary are
+written to Firestore and also attached to the session, so they are in the **Artifacts** tab of the
+UI to read and download — `ACC-…-carrier-letter.md` and `ACC-…-customer-summary.md`. A dispute the
+`amount_guard` blocked is deliberately **not** attached: its prose contains a figure the engine
+never computed, and a downloadable file is exactly the draft someone later mistakes for a reviewed
+one. That run gives you the `WITHHELD` message and nothing to download.
+
 Two things it will tell you rather than guess about:
 
 **It audits against a signed contract.** An invoice on its own cannot be wrong — it can only
-disagree with something. If the account is new, attach the contract too and say `contract`:
+disagree with something. Send one for an account with no contract on file and the agent says it
+could not audit it and asks for the document — it will not call an unchecked invoice clean. If the
+account is new, attach the contract too and say `contract`:
 Gemini transcribes it into the same `Contract` schema `seed_firestore` writes, it is filed
 under the account id, and every invoice you send afterwards is audited against it. Note what
 this does *not* change: the contracted rates become an input the rule engine compares
@@ -367,7 +399,7 @@ scripts/                      dev-only; never enters the container
 
 data/synthetic/               15 PDFs, 4 contracts, ground_truth.json
 data/extracted/               15 cached extractions - the offline evidence
-tests/                        151 tests, all offline
+tests/                        153 tests, all offline
 ```
 
 Two layout decisions that are load-bearing:
@@ -415,7 +447,7 @@ The two PDF templates are deliberately unalike — Brazilian (A4, purple, opens 
 | **Google ADK 2.7.1** | Agent graph: `SequentialAgent`, `ParallelAgent`, tools, session state |
 | **Cloud Run** | Hosts the agent and the ADK API server; `--trace_to_cloud` enabled |
 | **Firestore** (Native) | Canonical invoices, contracts, anomalies, disputes, review queue |
-| **Cloud Storage** | Raw invoice PDFs, uniform bucket-level access, read by `gs://` URI |
+| **Cloud Storage** | Two buckets, both uniform bucket-level access: raw invoice PDFs read by `gs://` URI, and the ADK artifact store holding the generated letters |
 | **Cloud Trace** | Per-run agent traces, including every tool call |
 | **Pub/Sub** | Event-driven ingestion with a dead-letter queue |
 | **Secret Manager** | Runtime secrets, least-privilege service account |
