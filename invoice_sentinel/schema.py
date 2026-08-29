@@ -188,6 +188,16 @@ class ExtractionProfile(BaseModel):
             "while the Brazilian FUST is a tax, and only the carrier knows which."
         ),
     )
+    tax_inclusive_pricing: bool = Field(
+        default=False,
+        description=(
+            "True when the printed prices already contain the taxes the bill "
+            "itemises, so the tax lines restate part of the total instead of "
+            "adding to it. Brazilian telecom bills work this way — the tax is "
+            "computed 'por dentro' and broken out only because Lei 12.741/2012 "
+            "requires it — while a US bill adds its taxes on top."
+        ),
+    )
     prompt_hints: list[str] = Field(
         default_factory=list,
         description="Layout notes handed to the extractor for this carrier",
@@ -327,19 +337,40 @@ class ExtractedInvoice(BaseModel):
         """Sum of every charge. Deterministic — never ask the model for this."""
         return sum((charge.amount for charge in self.charges), Decimal(0))
 
-    def consistency_warnings(self, tolerance: Decimal = Decimal("0.05")) -> list[str]:
+    def consistency_warnings(
+        self,
+        tolerance: Decimal = Decimal("0.05"),
+        *,
+        tax_inclusive: bool = False,
+    ) -> list[str]:
         """Soft checks that flag a suspicious extraction without rejecting it.
 
         Kept out of Pydantic validation because a carrier that rounds its own
         total should not send the extractor into a repair loop — it should be
         recorded and carried forward for a human to see.
+
+        `tax_inclusive` comes from the carrier's profile. Where prices already
+        contain the tax, the itemised tax lines restate part of the total rather
+        than adding to it, and summing them double-counts: a real Brazilian bill
+        was read correctly, line by line, and still reported as 149.42 out of
+        balance. Excluding them here keeps the warning meaning what it says — the
+        parts do not add up to the whole — instead of firing on every bill from
+        a country whose invoices are all built this way.
         """
         warnings: list[str] = []
 
-        delta = abs(self.charge_total() - self.header.total_amount)
+        counted = sum(
+            (
+                charge.amount
+                for charge in self.charges
+                if not (tax_inclusive and charge.category is ChargeCategory.TAX)
+            ),
+            Decimal(0),
+        )
+        delta = abs(counted - self.header.total_amount)
         if delta > tolerance:
             warnings.append(
-                f"charges sum to {self.charge_total()} but the invoice total is "
+                f"charges sum to {counted} but the invoice total is "
                 f"{self.header.total_amount} (off by {delta})"
             )
 

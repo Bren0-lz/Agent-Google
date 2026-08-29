@@ -441,3 +441,65 @@ def test_repair_prompt_lists_every_complaint():
         text = repair_prompt(error)
     assert "Fix exactly these problems" in text
     assert "99999" in text
+
+
+# --- Taxes that are already in the total -------------------------------------
+#
+# A real Brazilian bill was transcribed line by line, correctly, and still
+# reported as 149.42 out of balance: its ICMS, PIS, COFINS, FUST and FUNTTEL are
+# computed "por dentro" and printed only because Lei 12.741/2012 says so. They
+# restate part of the total. Summing them counts that money twice.
+
+
+def taxed_payload() -> dict:
+    """The same invoice, with the tax breakdown a Brazilian bill prints."""
+    payload = valid_payload()
+    payload["charges"].append(
+        {
+            "line_id": None,
+            "category": "tax",
+            "description": "ICMS",
+            "quantity": "1",
+            "unit_amount": None,
+            "amount": "16.18",
+            "period": None,
+        }
+    )
+    return payload
+
+
+def test_a_tax_inclusive_bill_that_adds_up_raises_no_warning():
+    invoice = ExtractedInvoice.model_validate(taxed_payload())
+
+    assert invoice.consistency_warnings(tax_inclusive=True) == []
+
+
+def test_the_same_bill_looks_unbalanced_where_tax_is_added_on_top():
+    """The opposite regime has to keep working, or the check means nothing."""
+    invoice = ExtractedInvoice.model_validate(taxed_payload())
+
+    warnings = invoice.consistency_warnings(tax_inclusive=False)
+
+    assert len(warnings) == 1
+    assert "off by 16.18" in warnings[0]
+
+
+def test_the_carriers_disagree_about_this_and_the_profiles_say_so():
+    """It is a property of the carrier's country, not of the extractor."""
+    from invoice_sentinel.profiles import NORTHWIND, VANTEL
+
+    assert VANTEL.tax_inclusive_pricing is True
+    assert NORTHWIND.tax_inclusive_pricing is False
+
+
+def test_a_missing_charge_is_still_caught_under_tax_inclusive_pricing():
+    """Excluding tax must not blind the check to a charge that is really absent."""
+    payload = taxed_payload()
+    payload["header"]["total_amount"] = "129.90"
+
+    warnings = ExtractedInvoice.model_validate(payload).consistency_warnings(
+        tax_inclusive=True
+    )
+
+    assert len(warnings) == 1
+    assert "off by 40.00" in warnings[0]

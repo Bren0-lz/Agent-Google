@@ -29,12 +29,20 @@ VANTEL = ExtractionProfile(
     thousands_separator=".",
     date_format="%d/%m/%Y",
     data_unit="GB",
-    tax_labels=["ICMS", "FUST", "FUNTTEL"],
+    # PIS/PASEP and COFINS belong here with the rest: a hint that names three of
+    # the five taxes a Brazilian bill prints leaves the model to guess the other
+    # two, and it should not have to.
+    tax_labels=["ICMS", "PIS/PASEP", "COFINS", "FUST", "FUNTTEL"],
+    tax_inclusive_pricing=True,
     prompt_hints=[
         "Amounts use a comma as decimal separator and a dot for thousands.",
         "Dates are DD/MM/YYYY.",
         "'Franquia' is the included allowance, 'Excedente' is overage.",
-        "Taxes (ICMS, FUST, FUNTTEL) are account-level and have no line_id.",
+        "Taxes (ICMS, PIS/PASEP, COFINS, FUST, FUNTTEL) are account-level and "
+        "have no line_id.",
+        "Taxes are computed 'por dentro' and are already contained in the "
+        "printed prices and in the invoice total: transcribe them as they "
+        "appear, but they restate part of the total rather than adding to it.",
     ],
 )
 
@@ -49,6 +57,9 @@ NORTHWIND = ExtractionProfile(
     data_unit="GB",
     tax_labels=["State Sales Tax"],
     fee_labels=["Federal Universal Service Fund", "Regulatory Recovery Fee"],
+    # The opposite regime: a US bill prints its prices before tax and adds the
+    # tax on top, so the tax lines do belong in the sum.
+    tax_inclusive_pricing=False,
     prompt_hints=[
         "Amounts use a dot as decimal separator and a comma for thousands.",
         "Dates are MM/DD/YYYY.",

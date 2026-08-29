@@ -421,7 +421,9 @@ def extract_invoice(
             extracted_at=datetime.datetime.now(datetime.timezone.utc),
             attempts=attempts,
             repair_notes=repair_notes,
-            warnings=invoice.consistency_warnings(),
+            warnings=invoice.consistency_warnings(
+                tax_inclusive=profile.tax_inclusive_pricing
+            ),
         ),
         invoice=invoice,
     )
