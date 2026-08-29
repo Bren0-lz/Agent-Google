@@ -8,11 +8,55 @@ Rules like RateDrift and PlanTierMismatch are meaningless without it.
 from __future__ import annotations
 
 import datetime
+import re
+import unicodedata
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .schema import Money, UsageMetric
+
+#: Punctuation a bill and a contract disagree about while meaning the same
+#: product: dashes of every width, brackets, dots, commas, slashes.
+_PUNCTUATION = re.compile(r"[\s\-‐-―_(),./:;]+")
+
+
+def normalised_name(name: str) -> str:
+    """A product name reduced to what two documents have to agree on.
+
+    A contract writes "Vantel Multi SIM (eSIM adicional na mesma linha)" and the
+    bill for it prints "Vantel Multi SIM – eSIM adicional". Comparing those with
+    == said the customer was billed for something they never bought, which is an
+    accusation, not a finding. Case, accents and punctuation are how the same
+    product is written twice; they are not how two products differ.
+
+    Deliberately not fuzzy: this collapses formatting, it does not measure
+    similarity. Two genuinely different add-ons stay different, and the caller
+    still decides what to do when nothing matches.
+    """
+    folded = unicodedata.normalize("NFKD", name.casefold())
+    stripped = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    return _PUNCTUATION.sub(" ", stripped).strip()
+
+
+def names_agree(one: str, other: str) -> bool:
+    """Whether two product names can be the same product spelled out differently.
+
+    True when the shorter normalised name is contained in the longer one. The
+    qualifier that goes missing sits at either end: a bill prints "Vantel Multi
+    SIM – eSIM adicional" for a contract's "Vantel Multi SIM (eSIM adicional na
+    mesma linha)", dropping the tail, and "Conecta Empresas 40 GB" for "Vantel
+    Conecta Empresas 40 GB", dropping the carrier off the head.
+
+    On its own this is too generous — "Roaming Pack" sits inside "Roaming Pack
+    Premium", a different product at a different price. Both callers pair it
+    with an exact price match, and the two together are what make it safe.
+    """
+    left, right = normalised_name(one), normalised_name(other)
+    if not left or not right:
+        return False
+    shorter, longer = sorted((left, right), key=len)
+    return shorter in longer
 
 
 class ContractedAllowance(BaseModel):
@@ -103,6 +147,39 @@ class Contract(BaseModel):
                 )
         return self
 
+    @model_validator(mode="after")
+    def _check_no_duplicate_plans(self) -> "Contract":
+        """One product, one plan entry.
+
+        Transcribing a contract, the model filed each plan twice: once under the
+        name the agreement uses and once under the shorter name an attached
+        invoice prints. It read "never invent a plan" as being about prices, and
+        the duplicates as a kindness to whoever had to match the two documents.
+
+        Nothing downstream needed the favour — plans are resolved through
+        contract.lines, never by a name read off a bill — and the cost is that
+        the record an audit computes money against stops being the agreement
+        somebody signed. Raising here puts the repair loop on it, which is how
+        every other transcription error in this file gets corrected.
+        """
+        for index, plan in enumerate(self.plans):
+            for earlier in self.plans[:index]:
+                same_name = normalised_name(earlier.plan_name) == normalised_name(
+                    plan.plan_name
+                )
+                # An abbreviation charging a different price is a different
+                # plan, and the contract is entitled to sell both.
+                abbreviated = earlier.monthly_rate == plan.monthly_rate and names_agree(
+                    earlier.plan_name, plan.plan_name
+                )
+                if same_name or abbreviated:
+                    raise ValueError(
+                        f"plans {earlier.plan_name!r} and {plan.plan_name!r} are the "
+                        f"same plan filed twice at {plan.monthly_rate}; transcribe "
+                        f"each plan once, under the name the contract itself uses"
+                    )
+        return self
+
     def plan_for_line(self, line_id: str) -> ContractedPlan | None:
         contracted = next((line for line in self.lines if line.line_id == line_id), None)
         if contracted is None:
@@ -115,10 +192,31 @@ class Contract(BaseModel):
     def addon_for(self, addon_name: str, line_id: str | None = None) -> ContractedAddon | None:
         """The entitlement covering this add-on, or None if there is no entitlement.
 
-        An account-wide add-on (empty line_ids) covers every line.
+        An account-wide add-on (empty line_ids) covers every line. Names are
+        matched through normalised_name, because the bill and the agreement are
+        two documents written by different people about the same product.
+        """
+        wanted = normalised_name(addon_name)
+        for addon in self.addons:
+            if normalised_name(addon.addon_name) != wanted:
+                continue
+            if not addon.line_ids or line_id is None or line_id in addon.line_ids:
+                return addon
+        return None
+
+    def addon_priced_at(
+        self, amount: Decimal, line_id: str | None = None
+    ) -> ContractedAddon | None:
+        """An entitlement this account holds at exactly this price, if any.
+
+        Only consulted once addon_for has already failed. A charge whose wording
+        matches nothing but whose amount is a price the contract sets is a
+        question about how two documents word the same thing — the caller sends
+        it to a person instead of disputing it. A charge that matches neither
+        name nor price is the case orphan_addon exists for.
         """
         for addon in self.addons:
-            if addon.addon_name != addon_name:
+            if addon.monthly_rate != amount:
                 continue
             if not addon.line_ids or line_id is None or line_id in addon.line_ids:
                 return addon

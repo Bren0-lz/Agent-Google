@@ -16,6 +16,7 @@ from decimal import Decimal
 
 from ..anomaly import Anomaly, AnomalyType, Evidence
 from ..config import RATE_DRIFT_TOLERANCE
+from ..contract import names_agree
 from ..schema import ChargeCategory, ExtractedInvoice, LineStatus, UsageMetric
 from .base import AuditContext, money, trailing_streak
 
@@ -78,18 +79,47 @@ def orphan_addon(ctx: AuditContext) -> list[Anomaly]:
             continue
 
         window = f"{AuditContext.period(affected[0])}..{AuditContext.period(affected[-1])}"
+        uncertain = False
         if entitlement is None:
-            reason = "no entitlement for this add-on exists on this line in the contract"
-            entitled_to = ctx.contract.addon_for(charge.description)
-            contract_evidence = Evidence(
-                claim=f"Contract entitlement for {charge.description!r}",
-                value=(
-                    f"granted to lines {entitled_to.line_ids}" if entitled_to is not None
-                    else "not present in the contract at all"
-                ),
-                source="contract",
-            )
-            confidence = 0.92
+            # Nothing answers to this wording. Before calling it unauthorised,
+            # ask whether the account holds an entitlement at exactly this
+            # price: a bill that abbreviates a service the contract spells out
+            # is a wording difference, and disputing one costs the customer
+            # credibility on the claims that are real.
+            priced = ctx.contract.addon_priced_at(charge.amount, charge.line_id)
+
+            # Same price and a name that opens the contract's: the bill dropped
+            # a qualifier off a service the customer holds. Neither signal alone
+            # would carry this — a price can coincide, a prefix can belong to a
+            # pricier sibling — but together there is nothing left to dispute.
+            if priced is not None and names_agree(charge.description, priced.addon_name):
+                continue
+
+            uncertain = priced is not None
+            if uncertain:
+                reason = (
+                    f"it is billed at {charge.amount}, the contracted price of "
+                    f"{priced.addon_name!r}, but under a description the contract "
+                    f"does not use"
+                )
+                contract_evidence = Evidence(
+                    claim="Contracted add-on at this exact price",
+                    value=f"{priced.addon_name} at {priced.monthly_rate}",
+                    source="contract",
+                )
+                confidence = 0.55
+            else:
+                reason = "no entitlement for this add-on exists on this line in the contract"
+                entitled_to = ctx.contract.addon_for(charge.description)
+                contract_evidence = Evidence(
+                    claim=f"Contract entitlement for {charge.description!r}",
+                    value=(
+                        f"granted to lines {entitled_to.line_ids}" if entitled_to is not None
+                        else "not present in the contract at all"
+                    ),
+                    source="contract",
+                )
+                confidence = 0.92
         else:
             reason = f"the parent line is {service_line.status.value}"
             contract_evidence = Evidence(
@@ -119,6 +149,7 @@ def orphan_addon(ctx: AuditContext) -> list[Anomaly]:
                 confidence=confidence,
                 recovered_amount=recovered,
                 months_affected=max(streak, 1),
+                needs_human_review=uncertain,
             )
         )
 

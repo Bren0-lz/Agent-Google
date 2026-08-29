@@ -322,3 +322,61 @@ def test_low_confidence_findings_are_flagged_for_a_human(tiers):
 
     assert len(findings) == 1
     assert findings[0].confidence < 0.85
+
+
+# --- OrphanAddon: the two documents word the same product differently ---------
+#
+# A real Brazilian bill put "Vantel Multi SIM – eSIM adicional" against a
+# contract that says "Vantel Multi SIM (eSIM adicional na mesma linha)". The
+# entitlement was there, account-wide, at the same price. Comparing the two
+# strings with == called it an unauthorised charge.
+
+
+def test_orphan_addon_looks_past_wording_to_find_the_entitlement(tiers):
+    """Punctuation and case are how one product is written twice."""
+    contract = build_contract(
+        plans=tiers, lines={LINE: "Small 5GB"},
+        addons=[("Vantel Multi SIM (eSIM adicional na mesma linha)", Decimal("12.90"), [])],
+    )
+    billed = LineInput(LINE, "Small 5GB", Decimal("59.90"), 5 * GB, GB,
+                       addons=[("Vantel Multi SIM – eSIM adicional", Decimal("12.90"))])
+
+    assert orphan_addon(scenario([[billed]] * 4, contract)) == []
+
+
+def test_orphan_addon_escalates_when_only_the_price_matches(tiers):
+    """Same money, unrecognisable wording: a question, not an accusation.
+
+    Disputing this costs the customer credibility on the claims that are real,
+    and the engine cannot tell a renamed service from an unauthorised one. It
+    says so instead of guessing.
+    """
+    contract = build_contract(
+        plans=tiers, lines={LINE: "Small 5GB"},
+        addons=[("Device Protection", Decimal("19.99"), [])],
+    )
+    billed = LineInput(LINE, "Small 5GB", Decimal("59.90"), 5 * GB, GB,
+                       addons=[("Seguro de aparelho", Decimal("19.99"))])
+
+    findings = orphan_addon(scenario([[billed]] * 4, contract))
+
+    assert len(findings) == 1
+    assert findings[0].needs_human_review is True
+    assert findings[0].confidence < 0.75   # below ESCALATION_CONFIDENCE_THRESHOLD
+
+
+def test_orphan_addon_still_disputes_what_matches_neither_name_nor_price(tiers):
+    """The case the rule exists for has to survive the two above."""
+    contract = build_contract(
+        plans=tiers, lines={LINE: "Small 5GB"},
+        addons=[("Device Protection", Decimal("19.99"), [])],
+    )
+    billed = LineInput(LINE, "Small 5GB", Decimal("59.90"), 5 * GB, GB,
+                       addons=[("Premium Concierge", Decimal("34.90"))])
+
+    findings = orphan_addon(scenario([[billed]] * 4, contract))
+
+    assert len(findings) == 1
+    assert findings[0].needs_human_review is False
+    assert findings[0].confidence > 0.9
+    assert findings[0].recovered_amount == Decimal("139.60")   # 34.90 x 4
