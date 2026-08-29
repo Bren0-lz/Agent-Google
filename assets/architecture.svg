@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900"
+     preserveAspectRatio="xMidYMid meet"
+     font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <title>Invoice Sentinel - architecture</title>
+  <desc>Extraction, audit and action stages of the Invoice Sentinel agent running on Cloud Run,
+  showing which stages call a model, the deterministic rule engine, the four tools the auditor may
+  call, and the amount_guard check that gates the dispute letter.</desc>
+
+  <defs>
+    <style>
+      svg {
+        --bg:#ffffff; --ink:#1f2328; --muted:#656d76; --line:#8c959f;
+        --rule:#d0d7de; --accent:#1f4e6b; --alert:#8c2f23;
+      }
+      @media (prefers-color-scheme: dark) {
+        svg {
+          --bg:#0f1115; --ink:#e6e8eb; --muted:#9198a1; --line:#6e7681;
+          --rule:#30363d; --accent:#6cb6ff; --alert:#ff7b72;
+        }
+      }
+
+      .h1   { font-size:18px; font-weight:600; fill:var(--ink); }
+      .h2   { font-size:11.5px; fill:var(--muted); }
+      .st   { font-size:10.5px; font-weight:600; fill:var(--muted); letter-spacing:1.4px; }
+      .m    { font-size:12.5px; fill:var(--ink);
+              font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; }
+      .ms   { font-size:10.5px; fill:var(--muted);
+              font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; }
+      .tag  { font-size:9px; fill:var(--accent); letter-spacing:.8px;
+              font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; }
+      .e    { font-size:10px; fill:var(--muted); }
+      .fn   { font-size:11px; fill:var(--muted); }
+
+      .b    { fill:var(--bg); stroke:var(--rule); stroke-width:1.2; }
+      .bl   { fill:var(--bg); stroke:var(--accent); stroke-width:2; }
+      .ba   { fill:var(--bg); stroke:var(--alert); stroke-width:1.6; }
+      .grp  { fill:none; stroke:var(--rule); stroke-width:1; }
+      .hair { stroke:var(--rule); stroke-width:1; }
+
+      .f    { stroke:var(--line); stroke-width:1.2; fill:none; marker-end:url(#h); }
+      .p    { stroke:var(--line); stroke-width:1.2; fill:none; }
+      .fd   { stroke:var(--line); stroke-width:1.2; fill:none; stroke-dasharray:4 3; marker-end:url(#h); }
+      .fa   { stroke:var(--alert); stroke-width:1.4; fill:none; marker-end:url(#ha); }
+    </style>
+
+    <marker id="h" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 7 4 L 0 7" fill="none" stroke="var(--line)" stroke-width="1.2"/>
+    </marker>
+    <marker id="ha" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 7 4 L 0 7" fill="none" stroke="var(--alert)" stroke-width="1.4"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="900" fill="var(--bg)"/>
+
+  <text class="h1" x="32" y="40">Invoice Sentinel</text>
+  <text class="h2" x="32" y="60">Cloud Run  .  Google ADK 2.7.1  .  gemini-3.5-flash via Vertex AI (location=global)  .  Firestore</text>
+  <line class="hair" x1="32" y1="76" x2="1568" y2="76"/>
+
+  <!-- ===== Cloud Run boundary ===== -->
+  <rect class="grp" x="32" y="92" width="1308" height="740"/>
+  <text class="ms"  x="44" y="110">Cloud Run  /  root SequentialAgent</text>
+
+  <!-- ===== stage 1 ===== -->
+  <text class="st" x="44" y="132">1   EXTRACT</text>
+
+  <rect class="bl"  x="44" y="142" width="280" height="52"/>
+  <text class="tag" x="312" y="158" text-anchor="end">LLM</text>
+  <text class="m"   x="56" y="166">invoice_extractor</text>
+  <text class="ms"  x="56" y="183">pdf -&gt; ExtractedInvoice</text>
+
+  <line class="hair" x1="324" y1="168" x2="340" y2="168"/>
+  <text class="ms" x="348" y="160">ValidationError -&gt; re-prompt, max 2</text>
+  <text class="ms" x="348" y="177">5xx / 429 -&gt; retry, max 3 (separate budget)</text>
+
+  <line class="f"  x1="184" y1="194" x2="184" y2="222"/>
+  <text class="ms" x="192" y="212">CanonicalInvoice</text>
+
+  <!-- ===== stage 2 ===== -->
+  <text class="st" x="44" y="240">2   AUDIT</text>
+
+  <rect class="grp" x="44" y="250" width="800" height="272"/>
+  <text class="ms"  x="56" y="268">auditor / SequentialAgent</text>
+
+  <rect class="b"  x="60" y="278" width="240" height="48"/>
+  <text class="m"  x="72" y="300">load_audit_context</text>
+  <text class="ms" x="72" y="316">contract, history</text>
+
+  <line class="f" x1="104" y1="326" x2="104" y2="350"/>
+
+  <rect class="grp" x="60" y="350" width="768" height="88"/>
+  <text class="ms"  x="72" y="368">rule_engine / ParallelAgent      five rules, no model call</text>
+
+  <rect class="b" x="72"  y="374" width="236" height="48"/>
+  <text class="m" x="84"  y="403">rules_unused_capacity</text>
+  <rect class="b" x="320" y="374" width="236" height="48"/>
+  <text class="m" x="332" y="403">rules_excess_usage</text>
+  <rect class="b" x="568" y="374" width="236" height="48"/>
+  <text class="m" x="580" y="403">rules_conformance</text>
+
+  <line class="f" x1="104" y1="438" x2="104" y2="462"/>
+
+  <rect class="b"  x="60" y="462" width="236" height="48"/>
+  <text class="m"  x="72" y="484">merge_findings</text>
+  <text class="ms" x="72" y="500">suppress, rank</text>
+
+  <line class="f" x1="296" y1="486" x2="308" y2="486"/>
+
+  <rect class="bl"  x="312" y="462" width="236" height="48"/>
+  <text class="tag" x="536" y="478" text-anchor="end">LLM</text>
+  <text class="m"   x="324" y="484">audit_judgment</text>
+  <text class="ms"  x="324" y="500">one action per finding</text>
+
+  <line class="f" x1="548" y1="486" x2="560" y2="486"/>
+
+  <rect class="b"  x="564" y="462" width="236" height="48"/>
+  <text class="m"  x="576" y="484">persist_findings</text>
+  <text class="ms" x="576" y="500">anomalies, decisions</text>
+
+  <!-- ===== stage 3 ===== -->
+  <text class="st" x="44" y="542">3   ACT</text>
+
+  <path class="p" d="M 430 510 L 430 530"/>
+  <path class="p" d="M 184 530 L 1114 530"/>
+  <line class="f" x1="184"  y1="530" x2="184"  y2="550"/>
+  <line class="f" x1="494"  y1="530" x2="494"  y2="550"/>
+  <line class="f" x1="804"  y1="530" x2="804"  y2="550"/>
+  <line class="f" x1="1114" y1="530" x2="1114" y2="550"/>
+
+  <rect class="b"  x="44" y="554" width="280" height="52"/>
+  <text class="m"  x="56" y="578">flag_anomaly()</text>
+  <text class="ms" x="56" y="594">remedy == dispute</text>
+
+  <rect class="b"  x="354" y="554" width="280" height="52"/>
+  <text class="m"  x="366" y="578">recommend_action()</text>
+  <text class="ms" x="366" y="594">remedy == optimise</text>
+
+  <rect class="b"  x="664" y="554" width="280" height="52"/>
+  <text class="m"  x="676" y="578">escalate_for_review()</text>
+  <text class="ms" x="676" y="594">confidence &lt; 0.75</text>
+
+  <rect class="b"  x="974" y="554" width="280" height="52"/>
+  <text class="m"  x="986" y="578">dismiss_finding()</text>
+  <text class="ms" x="986" y="594">evidence rejected</text>
+
+  <line class="f" x1="184"  y1="606" x2="184"  y2="626"/>
+  <line class="f" x1="494"  y1="606" x2="494"  y2="626"/>
+  <line class="f" x1="804"  y1="606" x2="804"  y2="626"/>
+  <line class="f" x1="1114" y1="606" x2="1114" y2="626"/>
+
+  <rect class="bl"  x="44" y="630" width="560" height="52"/>
+  <text class="tag" x="592" y="646" text-anchor="end">LLM</text>
+  <text class="m"   x="56" y="654">dispute_writer</text>
+  <text class="ms"  x="56" y="670">carrier letter, customer summary</text>
+
+  <rect class="b"  x="664" y="630" width="280" height="52"/>
+  <text class="m"  x="676" y="654">review_queue</text>
+  <text class="ms" x="676" y="670">Firestore collection</text>
+
+  <rect class="b"  x="974" y="630" width="280" height="52"/>
+  <text class="m"  x="986" y="654">closed</text>
+  <text class="ms" x="986" y="670">reason recorded</text>
+
+  <!-- amount guard -->
+  <line class="f" x1="300" y1="682" x2="300" y2="702"/>
+  <path class="bl" d="M 300 706 L 460 736 L 300 766 L 140 736 Z"/>
+  <text class="m"  x="300" y="733" text-anchor="middle" font-size="11.5">amount_guard (1)</text>
+  <text class="ms" x="300" y="750" text-anchor="middle">unverified amount?</text>
+
+  <line class="f" x1="462" y1="736" x2="516" y2="736"/>
+  <text class="e" x="489" y="729" text-anchor="middle">no</text>
+
+  <rect class="b"  x="520" y="710" width="300" height="52"/>
+  <text class="m"  x="532" y="734">DisputeStatus.DRAFT</text>
+  <text class="ms" x="532" y="750">next: approved, submitted</text>
+
+  <path class="fa" d="M 300 768 L 300 804 L 516 804"/>
+  <text class="e"  x="308" y="790">yes</text>
+
+  <rect class="b"  x="520" y="778" width="300" height="52"/>
+  <text class="ms" x="532" y="800">rewrite naming the amount</text>
+  <text class="ms" x="532" y="816">-&gt; back to dispute_writer</text>
+
+  <line class="fa" x1="822" y1="804" x2="896" y2="804"/>
+  <text class="e"  x="859" y="796" text-anchor="middle">after budget</text>
+
+  <rect class="ba" x="900" y="778" width="300" height="52"/>
+  <text class="m"  x="912" y="800" fill="var(--alert)">DisputeStatus.BLOCKED</text>
+  <text class="ms" x="912" y="816" fill="var(--alert)">terminal until a human acts</text>
+
+  <!-- ===== managed services ===== -->
+  <rect class="b"  x="1360" y="142" width="210" height="66"/>
+  <text class="m"  x="1372" y="166">Vertex AI</text>
+  <text class="ms" x="1372" y="183">gemini-3.5-flash</text>
+  <text class="ms" x="1372" y="199">location=global</text>
+
+  <rect class="b"  x="1360" y="440" width="210" height="88"/>
+  <text class="m"  x="1372" y="464">Firestore</text>
+  <text class="ms" x="1372" y="481">invoices, contracts,</text>
+  <text class="ms" x="1372" y="496">anomalies, disputes,</text>
+  <text class="ms" x="1372" y="511">review_queue</text>
+
+  <rect class="b"  x="1360" y="630" width="210" height="52"/>
+  <text class="m"  x="1372" y="654">Cloud Trace</text>
+  <text class="ms" x="1372" y="670">adk --trace_to_cloud</text>
+
+  <line class="f"  x1="1340" y1="175" x2="1356" y2="175"/>
+  <line class="f"  x1="1340" y1="484" x2="1356" y2="484"/>
+  <line class="fd" x1="1340" y1="656" x2="1356" y2="656"/>
+
+  <!-- ===== notes ===== -->
+  <line class="hair" x1="32" y1="856" x2="1568" y2="856"/>
+  <text class="fn" x="32" y="874">LLM marks a stage that calls the model. Money is computed only in rules/ using Decimal; no tool in audit_tools.py takes an amount as an argument.</text>
+  <text class="fn" x="32" y="890">(1) amount_guard compares every money-shaped token in the generated prose against the set the rule engine produced.</text>
+</svg>
