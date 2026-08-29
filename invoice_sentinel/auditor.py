@@ -69,7 +69,6 @@ class LoadAuditContext(BaseAgent):
         state = ctx.session.state
         invoice_payload = state.get(STATE_INVOICE)
         if not invoice_payload:
-            yield _event(ctx, self.name, "No extracted invoice in state; nothing to audit.")
             return
 
         canonical = CanonicalInvoice.model_validate(invoice_payload)
@@ -124,6 +123,23 @@ def _audit_context(state: dict) -> AuditContext | None:
     )
 
 
+def nothing_was_extracted(state) -> bool:
+    """Whether this run has an invoice at all.
+
+    A run can reach the auditor with nothing to audit — somebody opened the Web
+    UI and said hello. Every stage below checks this and stays silent, because
+    the alternative is what the deployed agent used to do: seven stages each
+    announcing that they had nothing to do, ending with a judgement that the
+    invoice "looks clean". Reporting a clean bill of health for an invoice
+    nobody sent is worse than saying nothing at all — it is a false statement
+    about a document that does not exist.
+
+    The intake stage has already explained what to attach, so silence here is
+    not silence to the user.
+    """
+    return not state.get(STATE_INVOICE)
+
+
 class RuleFamilyAgent(BaseAgent):
     """One family of rules. Deterministic, and concurrent with its siblings.
 
@@ -140,8 +156,13 @@ class RuleFamilyAgent(BaseAgent):
         self, ctx: InvocationContext
     ) -> AsyncGenerator[Event, None]:
         state = ctx.session.state
+        if nothing_was_extracted(state):
+            return
+
         context = _audit_context(state)
         if context is None:
+            # An invoice with no contract behind it is worth saying out loud:
+            # the account exists and cannot be audited yet.
             yield _event(
                 ctx, self.name, f"{self.family}: skipped, no contract on file for this account."
             )
@@ -179,6 +200,9 @@ class MergeFindings(BaseAgent):
         self, ctx: InvocationContext
     ) -> AsyncGenerator[Event, None]:
         state = ctx.session.state
+        if nothing_was_extracted(state):
+            return
+
         collected = [
             Anomaly.model_validate(payload)
             for family in RULE_FAMILIES
@@ -288,10 +312,30 @@ should know about this account.
 """
 
 
+def _skip_judgment_without_an_invoice(callback_context) -> types.Content | None:
+    """Keep the model out of a run that has nothing to judge.
+
+    The rule stages can simply not yield; an LlmAgent cannot, because it always
+    calls the model, and a model asked to summarise an audit that never happened
+    obliges — the deployed agent answered "The invoice looks clean" to someone
+    who had only said hello. That sentence is not a harmless no-op: it is a
+    clean bill of health for a document nobody sent, produced by the one stage
+    in this graph a reader is most likely to believe.
+
+    Returning content here skips the agent's own run entirely, so the tokens are
+    not spent either. Empty parts because the intake stage has already said the
+    useful thing.
+    """
+    if nothing_was_extracted(callback_context.state):
+        return types.Content(role="model", parts=[])
+    return None
+
+
 def build_judgment_agent() -> LlmAgent:
     return LlmAgent(
         model=config.MODEL_ID,
         name="audit_judgment",
+        before_agent_callback=_skip_judgment_without_an_invoice,
         description=(
             "Decides whether each computed finding is disputed, escalated to a "
             "human, or dismissed."
@@ -324,6 +368,9 @@ class PersistFindings(BaseAgent):
         self, ctx: InvocationContext
     ) -> AsyncGenerator[Event, None]:
         state = ctx.session.state
+        if nothing_was_extracted(state):
+            return
+
         content_hash = state.get(STATE_CONTENT_HASH)
         findings = state.get(STATE_FINDINGS) or {}
         if not content_hash or not findings:

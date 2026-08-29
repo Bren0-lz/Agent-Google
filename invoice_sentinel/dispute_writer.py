@@ -234,7 +234,9 @@ class DisputeWriterAgent(BaseAgent):
         state = ctx.session.state
         invoice_payload = state.get(STATE_INVOICE)
         if not invoice_payload:
-            yield self._say(ctx, "No invoice in state; nothing to write about.")
+            # Nothing was extracted on this run: the intake stage has already
+            # said what to attach, and a stage announcing that it has nothing to
+            # do only buries that message. See auditor.nothing_was_extracted.
             return
 
         disputed = audit_tools.decided_anomalies(state, "dispute")

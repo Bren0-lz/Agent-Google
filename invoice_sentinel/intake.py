@@ -98,18 +98,36 @@ def message_text(content: types.Content | None) -> str:
     ).lower()
 
 
+def profile_aliases(key: str, profile: ExtractionProfile) -> set[str]:
+    """Every way somebody might name this carrier.
+
+    The key, the full carrier name, and — the one that matters in practice —
+    the brand on its own. Someone sending a Vantel bill types "vantel", not
+    "br-vantel-empresas": the first deployment of this stage answered "you did
+    not name a carrier" to a message that said exactly which carrier it was.
+
+    Only the first word of the carrier name is taken as the brand. The rest is
+    the kind of word every carrier shares — Empresas, Wireless — and matching on
+    those would let "wireless" pick a carrier out of a sentence that never
+    named one.
+    """
+    name = profile.carrier_name.lower()
+    return {key.lower(), name, name.split()[0]}
+
+
 def profile_key_in(text: str) -> str | None:
     """The carrier profile named in the message, if any.
 
-    Matches the profile key itself and the carrier's name, because nobody types
-    us-northwind-wireless when they mean Northwind. Returns None rather than a
-    default: choosing the default is the agent's decision to announce, not this
-    function's to make silently.
+    Returns None rather than a default: choosing the default is the agent's
+    decision to announce, not this function's to make silently.
     """
     haystack = text.lower()
     for key, profile in PROFILES.items():
-        if key in haystack or profile.carrier_name.lower() in haystack:
-            return key
+        for alias in profile_aliases(key, profile):
+            # Whole words only: a carrier called "TIM" must not be found inside
+            # "estimativa", and this runs over free text somebody typed.
+            if re.search(rf"(?<![\w-]){re.escape(alias)}(?![\w-])", haystack):
+                return key
     return None
 
 
@@ -168,7 +186,8 @@ def help_text() -> str:
     one names the thing they can actually do.
     """
     carriers = "\n".join(
-        f"   - {profile.carrier_name} ({profile.country}) — say {key}"
+        f"   - {profile.carrier_name} ({profile.country}) — say "
+        f"'{profile.carrier_name.split()[0].lower()}' or '{key}'"
         for key, profile in sorted(PROFILES.items())
     )
     return (

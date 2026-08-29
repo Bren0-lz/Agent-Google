@@ -303,3 +303,32 @@ def test_the_message_does_not_label_every_attachment_at_once():
 
     assert [a.name for a in contracts] == ["contrato.pdf"]
     assert [a.name for a in invoices] == ["fatura-julho.pdf"]
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        # The brand on its own is what people actually type. The first deploy of
+        # this stage answered "you did not name a carrier" to a message saying
+        # "vantel", which is the whole reason these cases exist.
+        ("vantel", VANTEL.profile_key),
+        ("Vantel", VANTEL.profile_key),
+        ("northwind", NORTHWIND.profile_key),
+        ("a NORTHWIND bill", NORTHWIND.profile_key),
+        ("uma fatura da vantel empresas", VANTEL.profile_key),
+        # Shared words are not brands: matching them would pick a carrier out of
+        # a sentence that never named one.
+        ("wireless", None),
+        ("empresas", None),
+        # Whole words only, so a brand cannot be found inside another word.
+        ("estimativa de custo", None),
+    ],
+)
+def test_the_brand_alone_names_a_carrier(text, expected):
+    assert profile_key_in(text) == expected
+
+
+def test_help_text_offers_the_short_name_too():
+    said = help_text()
+    assert "'vantel'" in said
+    assert "'northwind'" in said

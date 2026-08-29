@@ -151,3 +151,34 @@ def test_an_empty_message_gets_help_and_no_extraction(monkeypatch):
     transcript = said(events)
     assert "Attach a telecom invoice" in transcript
     assert "nothing to extract" not in transcript
+
+
+def test_a_greeting_produces_one_answer_not_a_cascade():
+    """The whole graph, on a message with nothing attached.
+
+    This runs the real root_agent — every stage, including the auditor and the
+    dispute writer — and it runs offline, which is itself the point: with no
+    invoice on the run, no stage should reach Firestore or a model.
+
+    What is being pinned is the shape of the reply. The deployed agent used to
+    answer a greeting with seven stages reporting that they had nothing to do,
+    the last of which concluded that "the invoice looks clean" — a clean bill of
+    health for a document nobody sent. A person gets one answer, and it tells
+    them what to attach.
+    """
+    from invoice_sentinel.agent import root_agent
+
+    events = drive(root_agent, types.Content(role="user", parts=[types.Part(text="oi")]))
+
+    transcript = said(events)
+    assert "Attach a telecom invoice" in transcript
+
+    # The false statement, and the noise that surrounded it.
+    assert "looks clean" not in transcript
+    assert "nothing to audit" not in transcript
+    assert "nothing to write about" not in transcript
+    assert "No findings to persist" not in transcript
+    assert "skipped, no contract" not in transcript
+
+    speakers = {event.author for event in events if said([event]).strip()}
+    assert speakers == {"intake"}, f"only intake should speak, got {speakers}"
