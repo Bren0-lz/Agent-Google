@@ -170,3 +170,39 @@ def test_a_known_account_id_is_pinned_in_the_prompt():
     text = build_prompt(VANTEL, account_id="ACC-BR-2087")
 
     assert "ACC-BR-2087" in text
+
+
+def test_the_same_plan_filed_twice_is_repaired_not_filed(source):
+    """What the model actually did with a real contract and a real bill.
+
+    Asked to transcribe an agreement listing three plans, it filed six: each one
+    again under the shorter name the invoice prints, so that whoever had to
+    match the two documents would find either spelling. It read "never invent a
+    plan" as being about prices.
+
+    Nothing downstream wanted the help — a line resolves its plan through
+    contract.lines, never through a name read off a bill — and the price is that
+    the record every amount is computed against stops being the signed
+    agreement. The repair loop is how the other transcription errors here get
+    fixed, and this one belongs with them.
+    """
+    duplicated = valid_contract()
+    duplicated["plans"].append(
+        {
+            "plan_name": "Corp 10GB",
+            "monthly_rate": "89.90",
+            "allowances": [
+                {"metric": "data_mb", "included": "10240", "overage_unit_rate": "0.02"}
+            ],
+        }
+    )
+    client = FakeClient(json.dumps(duplicated), json.dumps(valid_contract()))
+
+    contract = extract_contract(source, VANTEL, client=client, model_id="test-model")
+
+    assert len(contract.plans) == 1
+    assert len(client.calls) == 2
+    repair = client.prompt_texts(1)[-1]
+    assert "Fix exactly these problems" in repair
+    # The complaint names both spellings, so the model can see what it did.
+    assert "Corp 10GB" in repair

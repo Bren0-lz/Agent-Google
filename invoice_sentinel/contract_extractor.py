@@ -81,6 +81,12 @@ Rules, in order of importance:
    `effective_to` null for an open-ended contract.
 8. An add-on with no line restriction is account-wide: leave `line_ids` empty
    rather than listing every line.
+9. One product is one entry. Do not file the same plan twice because another
+   document abbreviates its name — a bill that says "Conecta 40 GB" for the
+   contract's "Vantel Conecta Empresas 40 GB" is the same plan, and the name
+   that belongs in the record is the contract's own. Matching the two wordings
+   is not your problem to solve, and solving it by adding a plan puts a term in
+   the agreement that nobody signed.
 
 Return JSON matching the provided schema and nothing else."""
 
