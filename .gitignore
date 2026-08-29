@@ -220,7 +220,13 @@ __marimo__/
 # Documentacao local (nao versionada)
 /docs/
 
-# Contexto de trabalho local: notas de handoff entre sessoes e configuracao do
-# Claude Code. Nada aqui pertence a submissao publica, e settings.local.json
-# pode carregar caminhos e permissoes desta maquina.
-.claude/
+# Configuracao local do Claude Code: settings.local.json carrega caminhos e
+# permissoes desta maquina e nao pertence a submissao publica.
+#
+# HANDOFF.md e a excecao deliberada. E a continuidade entre sessoes - o que ja
+# foi testado, o que quebrou, o que se decidiu de proposito e por que - e um
+# clone novo sem ele comeca do zero. A negacao precisa de `.claude/*`, e nao de
+# `.claude/`: o git nao entra num diretorio excluido para reconsiderar o que ha
+# dentro dele.
+.claude/*
+!.claude/HANDOFF.md
