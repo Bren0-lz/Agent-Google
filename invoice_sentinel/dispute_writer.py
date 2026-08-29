@@ -255,6 +255,8 @@ class DisputeWriterAgent(BaseAgent):
         if self.persist:
             store.save_dispute(dispute)
 
+        artifacts = await self._save_documents(ctx, dispute)
+
         if dispute.amounts_verified:
             note = (
                 f"Drafted a dispute for {dispute.account_id} ({dispute.period}): "
@@ -270,14 +272,81 @@ class DisputeWriterAgent(BaseAgent):
                 f"Stored as blocked for human review; nothing will be sent."
             )
 
+        if artifacts:
+            note += (
+                "\nBoth documents are attached to this session as "
+                + ", ".join(sorted(artifacts))
+                + "."
+            )
+
         yield self._say(
-            ctx, note, state_delta={STATE_DISPUTE: dispute.model_dump(mode="json")}
+            ctx,
+            note,
+            state_delta={STATE_DISPUTE: dispute.model_dump(mode="json")},
+            artifact_delta=artifacts,
         )
 
-    def _say(self, ctx: InvocationContext, text: str, state_delta=None) -> Event:
+    async def _save_documents(
+        self, ctx: InvocationContext, dispute: Dispute
+    ) -> dict[str, int]:
+        """Attach the two documents to the session, or {} if they must not be.
+
+        Firestore is where these live; this is what puts them in front of the
+        person reading the conversation, who otherwise has no way to open the
+        one artefact the whole pipeline exists to produce.
+
+        A blocked dispute is deliberately not attached. Its prose contains a
+        figure the rule engine never computed, and a downloadable file is
+        precisely the draft someone later mistakes for a reviewed one — the
+        thing amount_guard exists to prevent. The WITHHELD note stays its only
+        output.
+        """
+        # getattr, because the tests build a context out of the handful of
+        # attributes a stage actually reads rather than standing up a real
+        # InvocationContext, and an unconfigured runner leaves this None.
+        service = getattr(ctx, "artifact_service", None)
+        if not dispute.amounts_verified or service is None:
+            return {}
+
+        stem = f"{dispute.account_id}-{dispute.period}"
+        documents = {
+            f"{stem}-carrier-letter.md": dispute.carrier_letter,
+            f"{stem}-customer-summary.md": dispute.executive_summary,
+        }
+
+        saved: dict[str, int] = {}
+        try:
+            for filename, text in documents.items():
+                saved[filename] = await service.save_artifact(
+                    app_name=ctx.app_name,
+                    user_id=ctx.user_id,
+                    session_id=ctx.session.id,
+                    filename=filename,
+                    artifact=types.Part.from_bytes(
+                        data=text.encode("utf-8"), mime_type="text/markdown"
+                    ),
+                )
+        except Exception:
+            # A convenience, not the record. The dispute is already in Firestore
+            # and the audit is already in the transcript; losing the download
+            # must not lose the run that produced it.
+            return {}
+
+        return saved
+
+    def _say(
+        self,
+        ctx: InvocationContext,
+        text: str,
+        state_delta=None,
+        artifact_delta=None,
+    ) -> Event:
         return Event(
             invocation_id=ctx.invocation_id,
             author=self.name,
             content=types.Content(role="model", parts=[types.Part(text=text)]),
-            actions=EventActions(state_delta=state_delta or {}),
+            actions=EventActions(
+                state_delta=state_delta or {},
+                artifact_delta=artifact_delta or {},
+            ),
         )

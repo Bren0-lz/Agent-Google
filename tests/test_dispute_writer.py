@@ -12,15 +12,19 @@ is what happens to a letter with a number nobody computed in it.
 
 from __future__ import annotations
 
+import asyncio
+import datetime
 import json
+import types as pytypes
 from decimal import Decimal
 
 import pytest
 
 from invoice_sentinel import amount_guard
 from invoice_sentinel.anomaly import Anomaly, AnomalyType, Evidence
-from invoice_sentinel.dispute import DisputeStatus
-from invoice_sentinel.dispute_writer import write_dispute
+from invoice_sentinel import dispute_writer as writer_module
+from invoice_sentinel.dispute import Dispute, DisputeStatus
+from invoice_sentinel.dispute_writer import DisputeWriterAgent, write_dispute
 from invoice_sentinel.schema import CanonicalInvoice
 from tests.test_extractor import FakeClient, valid_payload
 
@@ -196,3 +200,146 @@ def test_totals_come_from_the_engine_not_from_the_letter(invoice):
     assert dispute.optimisation_total == Decimal("239.60")
     assert dispute.disputed_finding_ids == ["rate_drift:11987650101"]
     assert dispute.optimisation_finding_ids == ["zombie_line:11987650101"]
+
+
+# --- Handing the documents to the person reading the conversation ------------
+#
+# Firestore is where the letter and the summary live. It is not where anybody
+# can open them: the Artifacts tab of the UI was empty, so the one artefact this
+# whole pipeline exists to produce could not be read off the screen that ran it.
+
+
+class FakeArtifactService:
+    """Records what was attached, the way the ADK's service would be asked."""
+
+    def __init__(self):
+        self.saved: dict[str, bytes] = {}
+
+    async def save_artifact(self, *, app_name, user_id, session_id, filename, artifact):
+        self.saved[filename] = artifact.inline_data.data
+        return len(self.saved)
+
+
+def writer_ctx(dispute, artifact_service):
+    """Only the attributes this stage reads.
+
+    A real InvocationContext would test the ADK rather than the agent; the same
+    reasoning as fake_ctx in test_intake.py.
+    """
+    findings = {"f1": anomaly().model_dump(mode="json")}
+    state = {
+        "canonical_invoice": dispute["invoice"].model_dump(mode="json"),
+        "findings": findings,
+        "decisions": {"f1": {"action": "dispute"}},
+    }
+    return pytypes.SimpleNamespace(
+        session=pytypes.SimpleNamespace(state=state, id="s1"),
+        invocation_id="i1",
+        app_name="test",
+        user_id="tester",
+        artifact_service=artifact_service,
+    )
+
+
+def _drafted_dispute(*, verified: bool) -> Dispute:
+    """A dispute whose guard verdict is fixed, so the agent is what is tested."""
+    return Dispute(
+        content_hash="abc123",
+        account_id="ACC-BR-1041",
+        carrier="Vantel Empresas",
+        currency="BRL",
+        period="2026-07",
+        status=DisputeStatus.DRAFT if verified else DisputeStatus.BLOCKED,
+        carrier_letter="Dear Vantel, 20.00 was overcharged.",
+        executive_summary="You can recover 20.00.",
+        disputed_total=Decimal("20.00"),
+        optimisation_total=Decimal("0.00"),
+        amounts_verified=verified,
+        unverified_amounts=[] if verified else ["4000.00"],
+        generated_at=datetime.datetime.now(datetime.timezone.utc),
+        model_id="fake",
+    )
+
+
+def run_writer(invoice, monkeypatch, *, verified: bool):
+    """Drive DisputeWriterAgent over a dispute whose guard verdict is fixed."""
+    drafted = _drafted_dispute(verified=verified)
+    monkeypatch.setattr(writer_module, "write_dispute", lambda *a, **kw: drafted)
+
+    service = FakeArtifactService()
+    agent = DisputeWriterAgent(name="dispute_writer", persist=False)
+    ctx = writer_ctx({"invoice": invoice}, service)
+
+    async def go():
+        return [event async for event in agent._run_async_impl(ctx)]
+
+    return service, asyncio.run(go())
+
+
+def test_a_verified_dispute_is_attached_to_the_session(invoice, monkeypatch):
+    """Both documents, openable from the conversation that produced them."""
+    service, events = run_writer(invoice, monkeypatch, verified=True)
+
+    assert sorted(service.saved) == [
+        "ACC-BR-1041-2026-07-carrier-letter.md",
+        "ACC-BR-1041-2026-07-customer-summary.md",
+    ]
+    assert b"Dear Vantel" in service.saved["ACC-BR-1041-2026-07-carrier-letter.md"]
+
+    # The event carries the delta, which is what makes the UI list them.
+    delta = {}
+    for event in events:
+        if event.actions and event.actions.artifact_delta:
+            delta.update(event.actions.artifact_delta)
+    assert set(delta) == set(service.saved)
+
+
+def test_a_blocked_dispute_is_not_attached(invoice, monkeypatch):
+    """The one file nobody may download.
+
+    A blocked letter quotes a figure the rule engine never computed. Storing it
+    as something a person can open is exactly the draft later mistaken for a
+    reviewed one - the outcome amount_guard exists to prevent.
+    """
+    service, events = run_writer(invoice, monkeypatch, verified=False)
+
+    assert service.saved == {}
+    said = "\n".join(
+        part.text
+        for event in events
+        if event.content
+        for part in (event.content.parts or [])
+        if part.text
+    )
+    assert "WITHHELD" in said
+    assert "attached to this session" not in said
+
+
+def test_an_artifact_service_that_fails_does_not_lose_the_audit(invoice, monkeypatch):
+    """The download is a convenience; the run that produced it is not."""
+
+    class BrokenArtifactService(FakeArtifactService):
+        async def save_artifact(self, **kwargs):
+            raise RuntimeError("bucket unreachable")
+
+    drafted_service = BrokenArtifactService()
+    monkeypatch.setattr(
+        writer_module, "write_dispute", lambda *a, **kw: _drafted_dispute(verified=True)
+    )
+    agent = DisputeWriterAgent(name="dispute_writer", persist=False)
+    ctx = writer_ctx({"invoice": invoice}, drafted_service)
+
+    async def go():
+        return [event async for event in agent._run_async_impl(ctx)]
+
+    events = asyncio.run(go())
+
+    said = "\n".join(
+        part.text
+        for event in events
+        if event.content
+        for part in (event.content.parts or [])
+        if part.text
+    )
+    assert "Drafted a dispute for ACC-BR-1041" in said
+    assert "attached to this session" not in said
