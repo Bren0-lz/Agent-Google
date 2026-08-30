@@ -40,6 +40,24 @@ from pydantic import (
 
 _CURRENCY_NOISE = re.compile(r"[^\d,.\-+]")
 
+#: Every dash a typesetter might print where the data means "minus". A PDF set
+#: in anything but a monospace face uses U+2212, and an en dash turns up wherever
+#: the layout was pasted out of a word processor. _CURRENCY_NOISE keeps only
+#: ASCII "-", so each of these used to be *dropped* rather than read, and a
+#: credit of fifty came back as a charge of fifty. Nothing downstream could
+#: notice: the sign is gone before the value is ever a Decimal.
+_MINUS_FORMS = str.maketrans(
+    {"−": "-", "–": "-", "—": "-", "‐": "-", "‑": "-"}
+)
+
+#: Accounting notation for a negative: (50,00) is a credit, not a charge. Same
+#: silent sign loss as the dashes above, by the same route.
+#:
+#: The currency symbol sits outside the bracket - "R$ (50,00)" is how the line
+#: is actually printed - so the pattern allows anything without a digit on
+#: either side, and nothing at all inside but the number.
+_PARENTHESISED = re.compile(r"^[^\d(]*\(([^()]*)\)[^\d)]*$", re.DOTALL)
+
 
 def _parse_money(value: Any) -> Any:
     """Coerce a transcribed amount into Decimal.
@@ -61,9 +79,22 @@ def _parse_money(value: Any) -> Any:
     if not isinstance(value, str):
         raise ValueError(f"cannot read {type(value).__name__} as a monetary amount")
 
-    raw = _CURRENCY_NOISE.sub("", value.strip())
+    text = value.strip().translate(_MINUS_FORMS)
+
+    wrapped = _PARENTHESISED.match(text)
+    if wrapped is not None:
+        text = wrapped.group(1).strip()
+
+    raw = _CURRENCY_NOISE.sub("", text)
     if not raw:
         raise ValueError("empty monetary amount")
+
+    # A value that is both parenthesised and signed says two things about its
+    # sign, and this is money: refuse rather than pick one. Guessing here is
+    # the same mistake as reading a Brazilian invoice with American separators,
+    # only smaller and harder to see.
+    if wrapped is not None and ("-" in raw or "+" in raw):
+        raise ValueError(f"{value!r} carries both parentheses and a sign")
 
     has_comma, has_dot = "," in raw, "." in raw
     if has_comma and has_dot:
@@ -78,9 +109,11 @@ def _parse_money(value: Any) -> Any:
         raw = f"{head}.{tail}" if len(tail) == 2 else raw.replace(",", "")
 
     try:
-        return Decimal(raw)
+        amount = Decimal(raw)
     except InvalidOperation as exc:
         raise ValueError(f"{value!r} is not a monetary amount") from exc
+
+    return -amount if wrapped is not None else amount
 
 
 #: A currency amount. Decimal internally, JSON string on the wire.

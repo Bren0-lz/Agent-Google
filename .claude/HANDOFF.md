@@ -38,7 +38,7 @@ dispute_writer      dois documentos, toda cifra verificada
 
 | | |
 |---|---|
-| Testes | **170 passando**, offline, sem credencial, ~1 s |
+| Testes | **203 passando**, offline, sem credencial, ~1 s |
 | Extração | 99,55 % (1781/1789) · 15/15 schema · 15/15 hashes · 0 reparos |
 | Auditoria | 5/5 recall · 0 falsos positivos · **1036,10 exatos** |
 | Perfil | 16/16 operadoras identificadas pelo timbre, sem chamada de modelo |
@@ -214,6 +214,33 @@ planos que continuam 3 (defeito 3.6), `consistency_warnings` vazio sob `tax_incl
 Detalhe da extração que vale registrar: `attempts: 2`. O loop de reparo rodou uma vez neste
 documento — a única evidência commitada de que ele funciona fora do dataset.
 
+### 3.12 O sinal do dinheiro se perdia de quatro maneiras (quinta sessão)
+
+Atacando a sugestão 2, a sonda no `_parse_money` achou defeito em vez de confirmar
+comportamento. **O parser não tinha teste nenhum** — a rede de segurança determinística da
+alegação central do projeto, sem uma linha de cobertura.
+
+`_CURRENCY_NOISE` guarda só o `-` ASCII, então **todo menos tipográfico era apagado junto com o
+`R$`**: `−50,00` (U+2212, o que um PDF bem diagramado imprime), `–50,00` (en dash, de layout colado
+de editor de texto), `—50,00` (em dash) e `(50,00)` (notação contábil) voltavam todos como
+**+50,00**. Um crédito de cinquenta virava cobrança de cinquenta, e o total que ele reconcilia se
+move em cem.
+
+Nada rio abaixo podia perceber: o sinal some **antes** de o valor ser `Decimal`. O `amount_guard`
+compara a carta contra o que o motor calculou — ele não compara o motor contra a página.
+
+Corrigido normalizando as formas de traço e lendo parênteses como negativo. Valor que declara o
+sinal duas vezes (`(-50,00)`) é **recusado**, não desempatado: é a mesma decisão que o
+`profile_for` toma numa operadora desconhecida.
+
+`tests/test_money.py` cobre o parser pela primeira vez, e `tests/test_adversarial_shapes.py` cobre
+o crédito atravessando o motor de regras e a fronteira de `RATE_DRIFT_TOLERANCE` — um centavo
+acima do contratado é arredondamento, dois é deriva, e faturar **abaixo** do contratado nunca é
+disputa. Os dois casos que a sugestão 2 ainda pedia; ciclo quebrado, identificadores reais e
+tributos discriminados já estavam cobertos por 3.11.
+
+203 testes. As métricas publicadas não se moveram: 5/5, 0 falsos positivos, 1036,10.
+
 ---
 
 ## 4. Decisões de design que precisam ser respeitadas
@@ -312,7 +339,7 @@ testaria o ADK, não o código.
 
 ### Comandos
 ```bash
-.venv\Scripts\python.exe -m pytest                                        # 170, ~1s
+.venv\Scripts\python.exe -m pytest                                        # 203, ~1s
 .venv\Scripts\python.exe -m scripts.eval_extraction --cache data/extracted
 .venv\Scripts\python.exe -m scripts.eval_audit      --cache data/extracted
 .venv\Scripts\python.exe -m scripts.eval_audit      --ground-truth   # isola bug de regra
@@ -436,7 +463,7 @@ invoice_sentinel/
   schema.py               ExtractionProfile, ChargeCategory, consistency_warnings
   rules/conformance.py    orphan_addon e rate_drift
   rules/                  5 regras, 3 famílias, zero LLM
-tests/                    170 testes, todos offline
+tests/                    203 testes, todos offline
 scripts/                  dev-only, nunca entra no container
 data/synthetic/           15 PDFs, 4 contratos, ground_truth.json
 data/independent/         fatura + contrato de origem independente
