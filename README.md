@@ -191,7 +191,12 @@ checks out; no contract means the agent says it could not audit it and asks for 
 
 ## Run it yourself
 
-Three paths, cheapest first.
+Four paths, cheapest first.
+
+**Prerequisites.** **Python 3.10 or newer** — `google-adk` 2.7.1 and `google-genai` both declare
+it; developed and tested on 3.12.9. Path A needs nothing else: no Google Cloud project, no
+credentials, no billing. Paths C and D additionally need the
+[gcloud CLI](https://cloud.google.com/sdk/docs/install) and a project with billing enabled.
 
 ```bash
 git clone https://github.com/Bren0-lz/invoice-sentinel.git
@@ -282,12 +287,26 @@ Locally you do not need a `.env` either. `config.configure_genai_backend()` fill
 import time with `os.environ.setdefault`, so `adk web`, the tests and the container behave
 identically. Values you set yourself always win.
 
+### D · Run the agent locally
+
+Nothing has to be deployed to run the agent on your own machine — but it still calls Vertex AI and
+Firestore, so it needs a project: the one path C provisioned, or an existing one. The Google client
+libraries read *application-default* credentials, which `gcloud auth login` does **not** write:
+
+```powershell
+gcloud auth application-default login
+```
+
 Then seed the contracts and history, and open the agent:
 
 ```bash
 python -m scripts.seed_firestore
 adk web invoice_sentinel
 ```
+
+`adk web` prints the local URL to open. It serves the same dev-ui as the deployed service, running
+the same pipeline against the same Firestore collections — the only difference is where the
+container lives.
 
 ---
 
