@@ -291,8 +291,15 @@ ela é só um texto bonito no transcript.
 um `before_agent_callback` que pula a execução inteira.
 
 **O cache por `content_hash` invalida teste de extração.** Depois da correção 3.2, reenviar o
-mesmo PDF devolve a extração antiga sem chamar o modelo. Para testar extração de verdade,
-**regere o PDF** (o reportlab embute timestamp, então o hash muda com o mesmo conteúdo).
+mesmo PDF devolve a extração antiga sem chamar o modelo, e a tela diz `reused as stored and not
+re-extracted`.
+
+**Regerar o dataset NÃO muda o hash** — esta entrada afirmava o contrário e estava errada.
+`render.py` passa `invariant=1` ao `SimpleDocTemplate` justamente para suprimir o timestamp
+embutido, de modo que o mesmo seed produza PDFs byte a byte idênticos e os hashes do
+`ground_truth.json` continuem válidos. Rodar `generate.py --out <outro dir>` devolve exatamente os
+mesmos bytes. Para forçar extração real, mude os **bytes** sem mexer no conteúdo: reescrever o PDF
+com o pypdf trocando `/CreationDate` e `/ModDate` basta, e preserva a página que o avaliador vê.
 
 **A dev-ui do ADK renderiza Markdown.** Uma linha indentada depois de uma lista é engolida como
 continuação do último bullet. Texto do agente precisa ser escrito pensando nisso.
