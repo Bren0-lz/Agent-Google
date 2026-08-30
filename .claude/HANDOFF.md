@@ -15,7 +15,7 @@ Agente autônomo que audita faturas B2B de telecom, construído para o **All Thi
 Hackathon** (track *The Taskmaster*). Uma fatura em PDF entra; sai uma carta de contestação
 verificada para a operadora e um resumo executivo para o cliente, sem humano no meio.
 
-Repositório: `Bren0-lz/Agent-Google` · Serviço:
+Repositório: `Bren0-lz/invoice-sentinel` · Serviço:
 https://invoice-sentinel-474711060457.us-central1.run.app
 
 Pipeline (`SequentialAgent`, Google ADK 2.7.1):

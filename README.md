@@ -194,8 +194,8 @@ checks out; no contract means the agent says it could not audit it and asks for 
 Three paths, cheapest first.
 
 ```bash
-git clone https://github.com/Bren0-lz/Agent-Google.git
-cd Agent-Google
+git clone https://github.com/Bren0-lz/invoice-sentinel.git
+cd invoice-sentinel
 python -m venv .venv
 source .venv/bin/activate          # Windows: .\.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
