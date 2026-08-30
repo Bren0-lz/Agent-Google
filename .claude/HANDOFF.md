@@ -38,7 +38,7 @@ dispute_writer      dois documentos, toda cifra verificada
 
 | | |
 |---|---|
-| Testes | **164 passando**, offline, sem credencial, ~1 s |
+| Testes | **170 passando**, offline, sem credencial, ~1 s |
 | Extração | 99,55 % (1781/1789) · 15/15 schema · 15/15 hashes · 0 reparos |
 | Auditoria | 5/5 recall · 0 falsos positivos · **1036,10 exatos** |
 | Perfil | 16/16 operadoras identificadas pelo timbre, sem chamada de modelo |
@@ -194,6 +194,26 @@ Qualquer recusa futura no intake depende disso.
 `minScale=1`). O critério para cruzar essa linha, registrado no próprio arquivo: ter substituído
 uma chamada de modelo, não uma conveniência.
 
+### 3.11 O documento de origem independente virou fixture (quinta sessão)
+
+Era a sugestão 1 e a evidência mais forte do projeto estava **fora do repositório**, em
+`Temp/vantel-docs/` — invisível para quem avalia. Agora vive em `data/independent/`: a fatura, o
+contrato assinado, a extração canônica commitada e `tests/test_independent_document.py`.
+
+O run em produção que gerou a fixture deu **zero achados**, e é justamente isso que a torna útil.
+Os defeitos 3.4 e 3.5 foram **falsos positivos neste mesmo documento** — tributo por dentro contado
+como cobrança a mais, e um adicional legítimo acusado porque fatura e contrato escrevem o produto
+de formas diferentes. O teste tranca a direção silenciosa: uma mudança que passe a achar dinheiro
+aqui não achou dinheiro, inventou uma disputa.
+
+O que ele cobre, tudo offline: hash do PDF commitado contra a extração (senão a fixture desgarra da
+própria evidência), operadora lida de um timbre que este repositório não diagramou, contrato com 3
+planos que continuam 3 (defeito 3.6), `consistency_warnings` vazio sob `tax_inclusive_pricing`
+(defeito 3.4) e zero achados do motor de regras (defeito 3.5).
+
+Detalhe da extração que vale registrar: `attempts: 2`. O loop de reparo rodou uma vez neste
+documento — a única evidência commitada de que ele funciona fora do dataset.
+
 ---
 
 ## 4. Decisões de design que precisam ser respeitadas
@@ -292,7 +312,7 @@ testaria o ADK, não o código.
 
 ### Comandos
 ```bash
-.venv\Scripts\python.exe -m pytest                                        # 164, ~1s
+.venv\Scripts\python.exe -m pytest                                        # 170, ~1s
 .venv\Scripts\python.exe -m scripts.eval_extraction --cache data/extracted
 .venv\Scripts\python.exe -m scripts.eval_audit      --cache data/extracted
 .venv\Scripts\python.exe -m scripts.eval_audit      --ground-truth   # isola bug de regra
@@ -375,9 +395,9 @@ Em ordem de retorno sobre esforço.
 um agente sem nenhum conhecimento do projeto que pesquisasse faturas brasileiras reais e montasse
 uma. Três defeitos apareceram de uma vez, todos invisíveis para o dataset — porque toda fatura do
 dataset sai do mesmo gerador. Vale transformar isso em rotina: uma fatura nova, de origem
-independente, a cada mudança relevante. Os documentos usados estão em
-`C:/Users/breno/AppData/Local/Temp/vantel-docs/` (fora do repositório) e valeria versioná-los
-como fixture de regressão.
+independente, a cada mudança relevante. Os documentos daquela sessão já estão versionados
+(3.11); o que falta é o hábito, não o arquivo. Os geradores continuam em
+`C:/Users/breno/AppData/Local/Temp/vantel-docs/`, fora do repositório.
 
 **2. Suíte de regressão com documentos adversariais.** Casos que já se sabe difíceis: ciclo
 quebrado (26/07–25/08), identificadores em formato real (`(11) 97412-3308`, `4.812.663-5`),
@@ -416,9 +436,10 @@ invoice_sentinel/
   schema.py               ExtractionProfile, ChargeCategory, consistency_warnings
   rules/conformance.py    orphan_addon e rate_drift
   rules/                  5 regras, 3 famílias, zero LLM
-tests/                    164 testes, todos offline
+tests/                    170 testes, todos offline
 scripts/                  dev-only, nunca entra no container
 data/synthetic/           15 PDFs, 4 contratos, ground_truth.json
+data/independent/         fatura + contrato de origem independente
 data/extracted/           15 extrações em cache — a evidência offline
 ```
 
