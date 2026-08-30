@@ -1,6 +1,6 @@
 # Invoice Sentinel — handoff
 
-Última atualização: 2026-08-29 (quarta sessão). Substitui a versão anterior; o que
+Última atualização: 2026-08-30 (quinta sessão). Substitui a versão anterior; o que
 continuava válido foi incorporado aqui.
 
 Versionado no repositório desde esta sessão: um clone novo sem ele começa do zero. Isso também
@@ -38,10 +38,11 @@ dispute_writer      dois documentos, toda cifra verificada
 
 | | |
 |---|---|
-| Testes | **161 passando**, offline, sem credencial, ~1 s |
+| Testes | **164 passando**, offline, sem credencial, ~1 s |
 | Extração | 99,55 % (1781/1789) · 15/15 schema · 15/15 hashes · 0 reparos |
 | Auditoria | 5/5 recall · 0 falsos positivos · **1036,10 exatos** |
-| Produção | HTTP 200, revisão `invoice-sentinel-00017-v29`, rodando como `invoice-sentinel-run` |
+| Perfil | 16/16 operadoras identificadas pelo timbre, sem chamada de modelo |
+| Produção | HTTP 200, revisão `invoice-sentinel-00018-92n`, rodando como `invoice-sentinel-run` |
 | Git | `main` sincronizado com `origin/main`, árvore limpa |
 
 Tudo o que está no repositório está no ar, e vice-versa.
@@ -108,7 +109,8 @@ abreviado que a fatura imprime, "ajudando" quem tivesse de casar os dois documen
   persistidos em `gs://agent-hackton-artifacts`. Uma disputa `blocked` **não** é anexada.
 - `deploy.ps1 -MinInstances` (default 1) elimina os ~16 s de cold start.
 - `help_text()` mostra a mensagem que espera de volta, com exemplo — o detalhe que as pessoas
-  erram é que o PDF e o nome da operadora vão na **mesma** mensagem.
+  erram é que o PDF e o nome da operadora vão na **mesma** mensagem. (Superado por 3.10: anexar
+  basta, e nomear virou exceção.)
 - README alinhado com o comportamento real.
 
 ### 3.8 O teto de custo passou a viver no script (quarta sessão)
@@ -158,6 +160,40 @@ depois, todos com `{}`**. O endpoint `/dev/apps/.../debug/trace/session/{id}` n�
 implantada (só `/dev-ui`), e buscar o trace por id do log do Cloud Run dá 404 — o caminho que
 funciona é listar e filtrar.
 
+### 3.10 A operadora passou a ser lida, não assumida (quinta sessão)
+
+Era a sugestão 2 da lista anterior, e cobria um palpite que ninguém tinha classificado como
+defeito. O `intake` caía em `DEFAULT_PROFILE_KEY` — que é brasileiro — sempre que ninguém
+digitava uma operadora. Uma fatura Northwind enviada sem uma palavra era **extraída inteira** sob
+dicas de vírgula decimal e só então recusada pelo `_carrier_mismatch` do extractor: a resposta
+certa, alcançada do jeito caro, e alcançada só porque aquela checagem da correção 3.1 existe.
+
+O nome de quem emitiu está impresso na página um por definição. `first_page_text` (pypdf) mais
+`profile_keys_in` resolvem com um regex, **sem chamada de modelo** — o mesmo critério que mantém
+as famílias de regras fora de um `LlmAgent`. Acerta os 16 documentos disponíveis: os 15 do
+dataset e a fatura de origem independente, cujo timbre imprime `VANTEL / E M P R E S A S` com as
+letras espaçadas e ainda assim casa pelo alias da marca.
+
+Três casos em que ele continua não decidindo sozinho:
+
+- **Digitalizado** (sem camada de texto): pergunta em vez de assumir. Se você nomear, sua palavra
+  vale, e o `_carrier_mismatch` reconfere depois que o modelo leu a página — é para esse caso que
+  aquela checagem continua existindo, e ela **não** deve ser removida por parecer redundante.
+- **Duas operadoras conhecidas na mesma página**: pergunta qual. `profile_key_in` passou a
+  devolver `None` também quando acha duas, em vez da primeira do registro.
+- **Nome digitado contradiz o impresso**: recusa na porta. Medido em produção: **264 ms, dois
+  eventos, nenhum `stateDelta`**, contra o pipeline inteiro que rodava antes.
+
+**Um efeito colateral que a mudança expôs.** A recusa no intake não parava nada: o
+`ExtractorAgent._source` lia o anexo por conta própria e extraía assim mesmo. É a armadilha do
+`SequentialAgent` outra vez — irmãos não podem ser pulados de fora. O extractor passou a exigir
+`invoice_attached`, o veredito do intake sobre aquela mesma mensagem, antes de olhar o anexo.
+Qualquer recusa futura no intake depende disso.
+
+`pypdf` subiu de dev para runtime (~0,15 s de import, pago uma vez por instância, e o serviço roda
+`minScale=1`). O critério para cruzar essa linha, registrado no próprio arquivo: ter substituído
+uma chamada de modelo, não uma conveniência.
+
 ---
 
 ## 4. Decisões de design que precisam ser respeitadas
@@ -199,6 +235,10 @@ trafega pelo estado: intake e extractor chamam `split_attachments()` sobre a mes
 
 **`ctx.end_invocation` não pula os irmãos de um `SequentialAgent`.** Cada sub-agente recebe o
 contexto via `model_copy`. Para silenciar estágios, cada um verifica o estado e não emite evento.
+Vale também para **recusas**, e isso é fácil de esquecer: o `ExtractorAgent` lia o anexo direto da
+mensagem, então uma recusa do intake não impedia nada — ele extraía assim mesmo. Hoje ele exige
+`invoice_attached`. Toda recusa nova no intake precisa de um portão correspondente rio abaixo, ou
+ela é só um texto bonito no transcript.
 
 **Um `LlmAgent` sempre chama o modelo.** Por isso `auditor._skip_judgment_without_an_invoice` é
 um `before_agent_callback` que pula a execução inteira.
@@ -252,7 +292,7 @@ testaria o ADK, não o código.
 
 ### Comandos
 ```bash
-.venv\Scripts\python.exe -m pytest                                        # 161, ~1s
+.venv\Scripts\python.exe -m pytest                                        # 164, ~1s
 .venv\Scripts\python.exe -m scripts.eval_extraction --cache data/extracted
 .venv\Scripts\python.exe -m scripts.eval_audit      --cache data/extracted
 .venv\Scripts\python.exe -m scripts.eval_audit      --ground-truth   # isola bug de regra
@@ -282,6 +322,10 @@ Ficaram no Firestore, para limpar quando o projeto fechar:
 | `ACC-BR-9001` | contrato, fatura, anomalia, disputa |
 | `ACC-BR-9002` | fatura, sem contrato |
 | `4.812.663-5` | contrato + fatura da Meridiano (documentos realistas) |
+
+Mais duas sessões sob o `user_id` `carrier-check`, da verificação da correção 3.10 em produção:
+uma auditoria completa de `ACC-US-77120` (conta do dataset, extração reaproveitada do cache) e uma
+recusa que não persistiu nada.
 
 Mais os artifacts correspondentes em `gs://agent-hackton-artifacts`. Nenhuma delas colide com o
 dataset (`ACC-BR-1041`, `2087`, `3312`, `ACC-US-77120`), então as métricas não são afetadas.
@@ -335,24 +379,20 @@ independente, a cada mudança relevante. Os documentos usados estão em
 `C:/Users/breno/AppData/Local/Temp/vantel-docs/` (fora do repositório) e valeria versioná-los
 como fixture de regressão.
 
-**2. Detecção automática entre os perfis conhecidos.** Hoje a pessoa precisa nomear a operadora.
-O extrator já sabe ler o nome impresso — a mesma máquina da correção 3.1 poderia *escolher* o
-perfil em vez de só conferi-lo, recusando o que não reconhece. Preserva o princípio de recusar em
-vez de adivinhar e remove o passo que mais confunde quem chega.
-
-**3. Suíte de regressão com documentos adversariais.** Casos que já se sabe difíceis: ciclo
+**2. Suíte de regressão com documentos adversariais.** Casos que já se sabe difíceis: ciclo
 quebrado (26/07–25/08), identificadores em formato real (`(11) 97412-3308`, `4.812.663-5`),
 crédito negativo, tributos discriminados, desconto por linha com arredondamento. Hoje isso só é
 testado à mão, no navegador.
 
-**4. Guardar o PDF auditado no bucket.** Rastreabilidade: hoje não há como reconferir uma
+**3. Guardar o PDF auditado no bucket.** Rastreabilidade: hoje não há como reconferir uma
 auditoria contra o documento que a originou.
 
-**5. Um perfil genérico.** Destravaria qualquer operadora ao custo de afrouxar a garantia que o
-README defende como princípio. Só depois da sugestão 2, e com o cuidado de manter a recusa como
-padrão.
+**4. Um perfil genérico.** Destravaria qualquer operadora ao custo de afrouxar a garantia que o
+README defende como princípio. A detecção de perfil que era pré-requisito já existe (3.10), mas o
+cuidado continua sendo manter a recusa como padrão — hoje ela é o que impede uma fatura da Vivo de
+ser lida com o layout da Vantel.
 
-**6. Histórico real de múltiplos ciclos numa conta nova.** As três regras `optimise` exigem
+**5. Histórico real de múltiplos ciclos numa conta nova.** As três regras `optimise` exigem
 `PATTERN_CYCLES` (3) ciclos e nunca foram exercitadas com documentos de origem independente — só
 com o dataset.
 
@@ -363,7 +403,8 @@ com o dataset.
 ```
 invoice_sentinel/
   config.py               model id, regiões, coleções, limiares
-  intake.py               porta de entrada, help_text, profile_key_in
+  intake.py               porta de entrada, help_text, escolha do perfil pelo timbre
+                          (first_page_text, carriers_printed_in, profile_keys_in)
   extractor.py            InvoiceSource, prompt, generate_validated (loop de reparo)
   extractor_agent.py      cache por hash + checagem de operadora
   contract_extractor.py   contrato assinado -> Contract
@@ -375,7 +416,7 @@ invoice_sentinel/
   schema.py               ExtractionProfile, ChargeCategory, consistency_warnings
   rules/conformance.py    orphan_addon e rate_drift
   rules/                  5 regras, 3 famílias, zero LLM
-tests/                    161 testes, todos offline
+tests/                    164 testes, todos offline
 scripts/                  dev-only, nunca entra no container
 data/synthetic/           15 PDFs, 4 contratos, ground_truth.json
 data/extracted/           15 extrações em cache — a evidência offline
