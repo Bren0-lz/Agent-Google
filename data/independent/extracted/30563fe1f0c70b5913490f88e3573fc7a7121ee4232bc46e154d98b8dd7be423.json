@@ -1,0 +1,383 @@
+{
+  "invoice": {
+    "charges": [
+      {
+        "amount": "149.90",
+        "category": "subscription",
+        "description": "Conecta Empresas 80 GB + Roaming Intl. - Assinatura",
+        "line_id": "(11) 97412-3308",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "-22.49",
+        "category": "discount",
+        "description": "Desconto Conecta Empresas 80 GB + Roaming Intl.",
+        "line_id": "(11) 97412-3308",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "19.90",
+        "category": "addon",
+        "description": "Vantel Proteção de Aparelho",
+        "line_id": "(11) 97412-3308",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": "19.90"
+      },
+      {
+        "amount": "12.90",
+        "category": "addon",
+        "description": "Vantel Multi SIM – eSIM adicional",
+        "line_id": "(11) 97412-3308",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": "12.90"
+      },
+      {
+        "amount": "44.82",
+        "category": "usage",
+        "description": "Chamadas internacionais – Portugal – móvel (Zona 1)",
+        "line_id": "(11) 97412-3308",
+        "period": "2026-08",
+        "quantity": "18",
+        "unit_amount": "2.49"
+      },
+      {
+        "amount": "89.90",
+        "category": "subscription",
+        "description": "Conecta Empresas 40 GB - Assinatura",
+        "line_id": "(11) 98226-5471",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "-13.49",
+        "category": "discount",
+        "description": "Desconto Conecta Empresas 40 GB",
+        "line_id": "(11) 98226-5471",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "19.90",
+        "category": "addon",
+        "description": "Vantel Proteção de Aparelho",
+        "line_id": "(11) 98226-5471",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": "19.90"
+      },
+      {
+        "amount": "89.90",
+        "category": "subscription",
+        "description": "Conecta Empresas 40 GB - Assinatura",
+        "line_id": "(11) 99105-2264",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "-13.49",
+        "category": "discount",
+        "description": "Desconto Conecta Empresas 40 GB",
+        "line_id": "(11) 99105-2264",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "64.90",
+        "category": "subscription",
+        "description": "Conecta Empresas 20 GB - Assinatura",
+        "line_id": "(11) 97733-8190",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "-9.74",
+        "category": "discount",
+        "description": "Desconto Conecta Empresas 20 GB",
+        "line_id": "(11) 97733-8190",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "39.60",
+        "category": "usage",
+        "description": "Dados excedentes à franquia do plano",
+        "line_id": "(11) 97733-8190",
+        "period": "2026-08",
+        "quantity": "4",
+        "unit_amount": "9.90"
+      },
+      {
+        "amount": "64.90",
+        "category": "subscription",
+        "description": "Conecta Empresas 20 GB - Assinatura",
+        "line_id": "(11) 98650-4127",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "-9.74",
+        "category": "discount",
+        "description": "Desconto Conecta Empresas 20 GB",
+        "line_id": "(11) 98650-4127",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "19.80",
+        "category": "usage",
+        "description": "Dados excedentes à franquia do plano",
+        "line_id": "(11) 98650-4127",
+        "period": "2026-08",
+        "quantity": "2",
+        "unit_amount": "9.90"
+      },
+      {
+        "amount": "89.90",
+        "category": "subscription",
+        "description": "Conecta Empresas 40 GB - Assinatura",
+        "line_id": "(11) 99384-7715",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "-13.49",
+        "category": "discount",
+        "description": "Desconto Conecta Empresas 40 GB",
+        "line_id": "(11) 99384-7715",
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "49.00",
+        "category": "subscription",
+        "description": "Gestão Vantel Mobile – Portal Corporativo (até 10 linhas)",
+        "line_id": null,
+        "period": "2026-08",
+        "quantity": "1",
+        "unit_amount": "49.00"
+      },
+      {
+        "amount": "-27.45",
+        "category": "discount",
+        "description": "Ajuste de cobrança indevida ref. 07/2026 – protocolo 2026-0714-88231",
+        "line_id": null,
+        "period": null,
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "116.18",
+        "category": "tax",
+        "description": "ICMS",
+        "line_id": null,
+        "period": null,
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "4.20",
+        "category": "tax",
+        "description": "PIS/PASEP",
+        "line_id": null,
+        "period": null,
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "19.36",
+        "category": "tax",
+        "description": "COFINS",
+        "line_id": null,
+        "period": null,
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "6.45",
+        "category": "tax",
+        "description": "FUST",
+        "line_id": null,
+        "period": null,
+        "quantity": "1",
+        "unit_amount": null
+      },
+      {
+        "amount": "3.23",
+        "category": "tax",
+        "description": "FUNTTEL",
+        "line_id": null,
+        "period": null,
+        "quantity": "1",
+        "unit_amount": null
+      }
+    ],
+    "header": {
+      "account_id": "4.812.663-5",
+      "billing_period_end": "2026-08-25",
+      "billing_period_start": "2026-07-26",
+      "carrier": "Vantel Telecomunicações S.A.",
+      "currency": "BRL",
+      "due_date": "2026-09-10",
+      "issue_date": "2026-08-27",
+      "total_amount": "645.43"
+    },
+    "service_lines": [
+      {
+        "assigned_to": "Marcos Antônio Ribeiro · Diretoria",
+        "label": "Marcos Antônio Ribeiro · Diretoria",
+        "line_id": "(11) 97412-3308",
+        "plan_name": "Conecta Empresas 80 GB + Roaming Intl.",
+        "status": "active"
+      },
+      {
+        "assigned_to": "Juliana Corrêa Barros · Comercial",
+        "label": "Juliana Corrêa Barros · Comercial",
+        "line_id": "(11) 98226-5471",
+        "plan_name": "Conecta Empresas 40 GB",
+        "status": "active"
+      },
+      {
+        "assigned_to": "Renato Falcão Salgado · Comercial",
+        "label": "Renato Falcão Salgado · Comercial",
+        "line_id": "(11) 99105-2264",
+        "plan_name": "Conecta Empresas 40 GB",
+        "status": "active"
+      },
+      {
+        "assigned_to": "Patrícia Lemos Nogueira · Administrativo",
+        "label": "Patrícia Lemos Nogueira · Administrativo",
+        "line_id": "(11) 97733-8190",
+        "plan_name": "Conecta Empresas 20 GB",
+        "status": "active"
+      },
+      {
+        "assigned_to": "Eduardo Mitsuo Tanaka · Logística",
+        "label": "Eduardo Mitsuo Tanaka · Logística",
+        "line_id": "(11) 98650-4127",
+        "plan_name": "Conecta Empresas 20 GB",
+        "status": "active"
+      },
+      {
+        "assigned_to": "Camila Souza Fontes · Suporte em campo",
+        "label": "Camila Souza Fontes · Suporte em campo",
+        "line_id": "(11) 99384-7715",
+        "plan_name": "Conecta Empresas 40 GB",
+        "status": "active"
+      }
+    ],
+    "usage_records": [
+      {
+        "consumed": "42700.8",
+        "included": "81920",
+        "line_id": "(11) 97412-3308",
+        "metric": "data_mb",
+        "overage": "0"
+      },
+      {
+        "consumed": "386",
+        "included": "0",
+        "line_id": "(11) 97412-3308",
+        "metric": "voice_min",
+        "overage": "0"
+      },
+      {
+        "consumed": "34201.6",
+        "included": "40960",
+        "line_id": "(11) 98226-5471",
+        "metric": "data_mb",
+        "overage": "0"
+      },
+      {
+        "consumed": "512",
+        "included": "0",
+        "line_id": "(11) 98226-5471",
+        "metric": "voice_min",
+        "overage": "0"
+      },
+      {
+        "consumed": "29593.6",
+        "included": "40960",
+        "line_id": "(11) 99105-2264",
+        "metric": "data_mb",
+        "overage": "0"
+      },
+      {
+        "consumed": "447",
+        "included": "0",
+        "line_id": "(11) 99105-2264",
+        "metric": "voice_min",
+        "overage": "0"
+      },
+      {
+        "consumed": "24166.4",
+        "included": "20480",
+        "line_id": "(11) 97733-8190",
+        "metric": "data_mb",
+        "overage": "4096"
+      },
+      {
+        "consumed": "128",
+        "included": "0",
+        "line_id": "(11) 97733-8190",
+        "metric": "voice_min",
+        "overage": "0"
+      },
+      {
+        "consumed": "21913.6",
+        "included": "20480",
+        "line_id": "(11) 98650-4127",
+        "metric": "data_mb",
+        "overage": "2048"
+      },
+      {
+        "consumed": "96",
+        "included": "0",
+        "line_id": "(11) 98650-4127",
+        "metric": "voice_min",
+        "overage": "0"
+      },
+      {
+        "consumed": "37068.8",
+        "included": "40960",
+        "line_id": "(11) 99384-7715",
+        "metric": "data_mb",
+        "overage": "0"
+      },
+      {
+        "consumed": "274",
+        "included": "0",
+        "line_id": "(11) 99384-7715",
+        "metric": "voice_min",
+        "overage": "0"
+      }
+    ]
+  },
+  "provenance": {
+    "attempts": 2,
+    "content_hash": "30563fe1f0c70b5913490f88e3573fc7a7121ee4232bc46e154d98b8dd7be423",
+    "extracted_at": "2026-08-29T21:47:39.808937Z",
+    "model_id": "gemini-3.5-flash",
+    "profile_key": "br-vantel-empresas",
+    "repair_notes": [
+      "6 validation errors for ExtractedInvoice\nusage_records.1.included\n  Input should be a valid decimal [type=decimal_parsing, input_value='unlimited', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/decimal_parsing\nusage_records.3.included\n  Input should be a valid decimal [type=decimal_parsing, input_value='unlimited', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/decimal_parsing\nusage_records.5.included\n  Input should be a valid decimal [type=decimal_parsing, input_value='unlimited', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/decimal_parsing\nusage_records.7.included\n  Input should be a valid decimal [type=decimal_parsing, input_value='unlimited', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/decimal_parsing\nusage_records.9.included\n  Input should be a valid decimal [type=decimal_parsing, input_value='unlimited', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/decimal_parsing\nusage_records.11.included\n  Input should be a valid decimal [type=decimal_parsing, input_value='unlimited', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/decimal_parsing"
+    ],
+    "source_uri": "upload://30563fe1f0c70b5913490f88e3573fc7a7121ee4232bc46e154d98b8dd7be423/fatura.pdf",
+    "warnings": []
+  }
+}

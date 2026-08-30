@@ -6,7 +6,7 @@
 [![Google ADK 2.7.1](https://img.shields.io/badge/Google%20ADK-2.7.1-34A853)](https://google.github.io/adk-docs/)
 [![Cloud Run](https://img.shields.io/badge/Cloud%20Run-deployed-4285F4)](https://cloud.google.com/run)
 [![Firestore](https://img.shields.io/badge/Firestore-native-FBBC04)](https://cloud.google.com/firestore)
-[![Tests](https://img.shields.io/badge/tests-164%20passing-34A853)](#a--zero-credentials-90-seconds)
+[![Tests](https://img.shields.io/badge/tests-170%20passing-34A853)](#a--zero-credentials-90-seconds)
 [![License: MIT](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE)
 
 > **Live service:** https://invoice-sentinel-474711060457.us-central1.run.app
@@ -207,7 +207,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-**164 tests, fully offline.** No Google Cloud project, no API key, no billing. This includes
+**170 tests, fully offline.** No Google Cloud project, no API key, no billing. This includes
 `test_extracted_audit.py`, which replays the committed extractions in `data/extracted/` through the
 real rule engine and asserts the exact recovery figures — the end-to-end claim, verified without
 spending a token.
@@ -412,7 +412,8 @@ scripts/                      dev-only; never enters the container
 
 data/synthetic/               15 PDFs, 4 contracts, ground_truth.json
 data/extracted/               15 cached extractions - the offline evidence
-tests/                        164 tests, all offline
+data/independent/             one invoice + contract nobody here designed
+tests/                        170 tests, all offline
 ```
 
 Two layout decisions that are load-bearing:
@@ -450,6 +451,27 @@ The two PDF templates are deliberately unalike — Brazilian (A4, purple, opens 
 
 > ⚠️ **Do not regenerate the dataset.** `content_hash` values are the Firestore document keys and
 > the anchor of every published metric. Regenerating would invalidate all of it.
+
+### The document nobody here designed
+
+Everything above comes out of one generator, and that is a weaker claim than it looks: a template
+and the code that reads it can share the same wrong assumption and stay green forever.
+
+So [`data/independent/`](data/independent/) holds a Brazilian invoice and its signed contract built
+**independently**, from public material about how carriers here actually bill — a cycle that does
+not start on the first (26/07–25/08), taxes itemised because Lei 12.741/2012 requires it,
+identifiers in the shape a real bill prints them (`(11) 97412-3308`, `4.812.663-5`). Nobody
+designing it knew which rules would read it.
+
+Auditing it the first time surfaced **three defects at once, and all three were false positives**:
+taxes computed *por dentro* counted as money billed twice, and a legitimate add-on accused of being
+unauthorised because the invoice and the contract spell the same product differently. None of the
+15 synthetic invoices could have caught any of them.
+
+[`tests/test_independent_document.py`](tests/test_independent_document.py) now locks that document
+green, offline, against the committed extraction — including that the carrier is read off a
+letterhead this repository did not typeset. It is the false-positive control with the generator
+taken out of the loop.
 
 ---
 

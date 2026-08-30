@@ -1,0 +1,97 @@
+{
+  "account_id": "4.812.663-5",
+  "addons": [
+    {
+      "addon_name": "Vantel Proteção de Aparelho",
+      "line_ids": [],
+      "monthly_rate": "19.90"
+    },
+    {
+      "addon_name": "Vantel Multi SIM (eSIM adicional na mesma linha)",
+      "line_ids": [],
+      "monthly_rate": "12.90"
+    },
+    {
+      "addon_name": "Gestão Vantel Mobile – Portal Corporativo",
+      "line_ids": [],
+      "monthly_rate": "49.00"
+    }
+  ],
+  "carrier": "Vantel Telecomunicações S.A.",
+  "currency": "BRL",
+  "effective_from": "2024-09-01",
+  "effective_to": "2026-08-31",
+  "lines": [
+    {
+      "activated_on": "2024-09-01",
+      "cancelled_on": null,
+      "line_id": "(11) 97412-3308",
+      "plan_name": "Vantel Conecta Empresas 80 GB + Roaming Internacional"
+    },
+    {
+      "activated_on": "2024-09-01",
+      "cancelled_on": null,
+      "line_id": "(11) 98226-5471",
+      "plan_name": "Vantel Conecta Empresas 40 GB"
+    },
+    {
+      "activated_on": "2024-09-01",
+      "cancelled_on": null,
+      "line_id": "(11) 99105-2264",
+      "plan_name": "Vantel Conecta Empresas 40 GB"
+    },
+    {
+      "activated_on": "2024-09-01",
+      "cancelled_on": null,
+      "line_id": "(11) 97733-8190",
+      "plan_name": "Vantel Conecta Empresas 20 GB"
+    },
+    {
+      "activated_on": "2024-10-14",
+      "cancelled_on": null,
+      "line_id": "(11) 98650-4127",
+      "plan_name": "Vantel Conecta Empresas 20 GB"
+    },
+    {
+      "activated_on": "2025-02-03",
+      "cancelled_on": null,
+      "line_id": "(11) 99384-7715",
+      "plan_name": "Vantel Conecta Empresas 40 GB"
+    }
+  ],
+  "plans": [
+    {
+      "allowances": [
+        {
+          "included": "20480",
+          "metric": "data_mb",
+          "overage_unit_rate": "9.90"
+        }
+      ],
+      "monthly_rate": "64.90",
+      "plan_name": "Vantel Conecta Empresas 20 GB"
+    },
+    {
+      "allowances": [
+        {
+          "included": "40960",
+          "metric": "data_mb",
+          "overage_unit_rate": "9.90"
+        }
+      ],
+      "monthly_rate": "89.90",
+      "plan_name": "Vantel Conecta Empresas 40 GB"
+    },
+    {
+      "allowances": [
+        {
+          "included": "81920",
+          "metric": "data_mb",
+          "overage_unit_rate": "9.90"
+        }
+      ],
+      "monthly_rate": "149.90",
+      "plan_name": "Vantel Conecta Empresas 80 GB + Roaming Internacional"
+    }
+  ]
+}
