@@ -478,8 +478,11 @@ data/extracted/           15 extrações em cache — a evidência offline
 ## 10. Contexto humano
 
 Breno trabalha numa consultoria B2B de telecom que audita contas telefônicas de pequenas e médias
-empresas. O projeto existe porque esse trabalho é feito à mão, não escala, e é o primeiro a ser
-pulado quando o mês aperta — que é exatamente quando o dinheiro vaza.
+empresas. **Não é ele quem faz a auditoria** — ele observa de perto o trabalho dos colegas, e vê a
+mesma dor em empresários em geral, que na prática pagam a fatura porque ela chegou. Vale escrever
+nessa voz: qualquer texto que o coloque auditando contas está errado, e já saiu errado uma vez num
+rascunho de post. O projeto existe porque esse trabalho é feito à mão, não escala, e é o primeiro a
+ser pulado quando o mês aperta — que é exatamente quando o dinheiro vaza.
 
 Ele prefere **ser avisado do problema real** a receber um relatório otimista. Todos os defeitos
 da seção 3 apareceram porque ele pediu para testar no serviço público, com documentos que
