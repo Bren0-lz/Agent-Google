@@ -13,12 +13,18 @@ expects — so the auditor, the rule engine and the dispute writer are untouched
 by any of this. Filing a contract under its account id is enough for
 load_audit_context to find it on the next run.
 
-Two deliberate refusals, in the same spirit as profile_for() and
+Three deliberate refusals, in the same spirit as profile_for() and
 run_rule_family():
 
   * an ambiguous batch of attachments is a question, not a guess;
   * an unknown carrier is refused rather than read with another carrier's
-    layout hints, because that produces plausible, wrong numbers.
+    layout hints, because that produces plausible, wrong numbers;
+  * a bill whose printed carrier is not the one named is turned away here,
+    before an extraction is paid for.
+
+Which carrier a run uses is read off the bill rather than assumed. The name is
+printed on page one by definition, so a text layer and a regex settle it — no
+model call, and no default standing in for an answer nobody gave.
 
 State contract:
 
@@ -31,6 +37,7 @@ State contract:
 from __future__ import annotations
 
 import dataclasses
+import io
 import re
 from typing import AsyncGenerator
 
@@ -38,6 +45,7 @@ from google.adk.agents import BaseAgent
 from google.adk.agents.invocation_context import InvocationContext
 from google.adk.events import Event, EventActions
 from google.genai import types
+from pypdf import PdfReader
 
 from . import config, store
 from .contract_extractor import ContractExtractionFailed, extract_contract
@@ -115,20 +123,71 @@ def profile_aliases(key: str, profile: ExtractionProfile) -> set[str]:
     return {key.lower(), name, name.split()[0]}
 
 
+def profile_keys_in(text: str) -> set[str]:
+    """Every carrier profile named anywhere in a piece of text.
+
+    A set, because the callers disagree about what more than one means. In a
+    sentence somebody typed it is a contradiction to resolve; on the face of an
+    invoice it is a document naming a carrier it was not issued by. Deciding
+    that here would be this function guessing on behalf of both.
+    """
+    haystack = text.lower()
+    return {
+        key
+        for key, profile in PROFILES.items()
+        # Whole words only: a carrier called "TIM" must not be found inside
+        # "estimativa", and this runs over free text somebody typed.
+        if any(
+            re.search(rf"(?<![\w-]){re.escape(alias)}(?![\w-])", haystack)
+            for alias in profile_aliases(key, profile)
+        )
+    }
+
+
 def profile_key_in(text: str) -> str | None:
     """The carrier profile named in the message, if any.
 
     Returns None rather than a default: choosing the default is the agent's
-    decision to announce, not this function's to make silently.
+    decision to announce, not this function's to make silently. Two carriers
+    named at once is also None — "vantel or northwind?" names no carrier, and
+    answering with whichever came first in the registry would be a coin toss
+    wearing a straight face.
     """
-    haystack = text.lower()
-    for key, profile in PROFILES.items():
-        for alias in profile_aliases(key, profile):
-            # Whole words only: a carrier called "TIM" must not be found inside
-            # "estimativa", and this runs over free text somebody typed.
-            if re.search(rf"(?<![\w-]){re.escape(alias)}(?![\w-])", haystack):
-                return key
-    return None
+    named = profile_keys_in(text)
+    return named.pop() if len(named) == 1 else None
+
+
+def first_page_text(data: bytes) -> str:
+    """The text layer of a PDF's first page, or "" when it has none.
+
+    Page one is enough by construction: what identifies the issuer — the
+    letterhead, the tax registration, the carrier's own name — is printed where
+    the bill starts, and reading further would spend time to learn nothing.
+
+    A scanned invoice has no text layer and comes back empty. That is an
+    answer, not a failure, which is why a PDF pypdf cannot parse is caught into
+    the same empty string: the model reads the raw bytes and may well manage
+    where this cannot, so the caller should get to ask which carrier it is
+    rather than watch intake crash on the way to the same question.
+    """
+    try:
+        reader = PdfReader(io.BytesIO(data))
+        if not reader.pages:
+            return ""
+        return reader.pages[0].extract_text() or ""
+    except Exception:  # noqa: BLE001 - see docstring
+        return ""
+
+
+def carriers_printed_in(attachment: PdfAttachment) -> set[str]:
+    """Every carrier profile whose name is printed on this PDF.
+
+    The counterpart of profile_key_in: that one reads what the person typed,
+    this one reads what the document says. Deterministic, in Python, with no
+    model call — the same reasoning that keeps the rule families out of an
+    LlmAgent applies to a lookup that a regex over a text layer settles.
+    """
+    return profile_keys_in(first_page_text(attachment.data))
 
 
 def split_attachments(
@@ -182,11 +241,12 @@ def looks_like_contract(text: str, attachment: PdfAttachment) -> bool:
 def help_text() -> str:
     """What to say to someone who sent no PDF.
 
-    The first version named a state key the person can neither set nor see.
-    This one shows the message they are supposed to send. Someone opening the
-    agent for the first time is not short of description — they are short of
-    one worked example, and the detail they get wrong is that the PDF and the
-    carrier's name travel in the same message, not in two.
+    The first version named a state key the person can neither set nor see. The
+    second showed the message to send, because the detail people got wrong was
+    that the PDF and the carrier's name had to travel together. They no longer
+    do: the bill is read for its own letterhead, so naming a carrier went from
+    the instruction to the exception, and the shortest true description of what
+    to do is now "attach it".
     """
     carriers = "\n".join(
         f"- {profile.carrier_name} ({profile.country}) — say "
@@ -198,17 +258,19 @@ def help_text() -> str:
         "I audit telecom invoices. Attach one as a PDF and I read every line, "
         "compare it against the signed contract and against the account's "
         "earlier cycles, and draft what is worth disputing.\n\n"
-        "**Send it like this** — the PDF and the carrier's name in the same "
-        "message:\n\n"
-        f"    [attach {example.carrier_name.split()[0].lower()}-july.pdf]  "
-        f"{example.carrier_name.split()[0].lower()}\n\n"
-        "Carriers I have a layout profile for:\n\n"
+        "**Send it like this** — the PDF on its own is enough:\n\n"
+        f"    [attach {example.carrier_name.split()[0].lower()}-july.pdf]\n\n"
+        "I read the carrier's name off the bill. The ones I have a layout "
+        "profile for:\n\n"
         f"{carriers}\n\n"
         # Unindented and in its own paragraph: the UI renders this as Markdown,
         # where an indented line after a list is swallowed as a continuation of
         # the last bullet — on screen it ran straight on from the last item.
-        "Any other carrier I refuse rather than misread, and I check the name "
-        "you give against the one printed on the bill.\n\n"
+        "Any other carrier I refuse rather than misread. If the name is not "
+        "printed anywhere I can read it — a scan carries no text — I ask "
+        "instead of assuming, and you can name it in the same message as the "
+        "PDF. Name one the bill contradicts and I stop before extracting "
+        "anything.\n\n"
         "**Two things worth knowing before you send one:**\n\n"
         "1. I audit against a signed contract. Without one I cannot tell an "
         "overcharge from a charge you agreed to, so I will say I could not "
@@ -248,15 +310,6 @@ class IntakeAgent(BaseAgent):
                 yield self._say(ctx, help_text())
             return
 
-        named_profile = profile_key_in(text)
-        profile_key = named_profile or state.get("profile_key") or config.DEFAULT_PROFILE_KEY
-
-        try:
-            profile = profile_for(profile_key)
-        except ValueError as error:
-            yield self._say(ctx, str(error))
-            return
-
         contracts, invoices = split_attachments(ctx.user_content)
 
         # One PDF with nothing said about it is an invoice. Two or more with no
@@ -272,7 +325,28 @@ class IntakeAgent(BaseAgent):
             )
             return
 
-        notes: list[str] = []
+        # The message first, then the session: a caller that built the session
+        # over HTTP named a carrier deliberately, but somebody typing one now is
+        # answering about the file they just attached.
+        asked_for = profile_key_in(text) or state.get("profile_key")
+        if asked_for is not None:
+            try:
+                profile_for(asked_for)
+            except ValueError as error:
+                yield self._say(ctx, str(error))
+                return
+
+        # The invoice decides when there is one; a contract sent on its own is
+        # filed under the same profile, and carries the carrier's name too.
+        profile_key, note = self._profile_for_pdf(
+            asked_for, invoices[0] if invoices else contracts[0]
+        )
+        if profile_key is None:
+            yield self._say(ctx, note)
+            return
+
+        profile = profile_for(profile_key)
+        notes: list[str] = [note]
         delta: dict = {}
 
         for attachment in contracts:
@@ -282,23 +356,81 @@ class IntakeAgent(BaseAgent):
                 delta["contract_on_file"] = account_id
 
         if invoices:
-            invoice = invoices[0]
             # Only the decision travels through state; the extractor re-reads
             # the bytes from the same message. See split_attachments().
             delta["invoice_attached"] = True
-            delta["uploaded_name"] = invoice.name
+            delta["uploaded_name"] = invoices[0].name
             delta["profile_key"] = profile_key
-            note = f"Reading {invoice.label} as a {profile.carrier_name} invoice."
-            if named_profile is None:
-                note += (
-                    f" You did not name a carrier, so I assumed "
-                    f"{profile.carrier_name}; name another profile to change it."
-                )
-            notes.append(note)
         elif contracts:
             notes.append("Attach an invoice next and I will audit it against this.")
 
         yield self._say(ctx, "\n".join(notes), state_delta=delta)
+
+    def _profile_for_pdf(
+        self, asked_for: str | None, pdf: PdfAttachment
+    ) -> tuple[str | None, str]:
+        """Which profile to read this PDF with, and what to say about it.
+
+        A None key means the second element is a refusal and the run stops
+        here.
+
+        The bill is the better witness, so it is read first. Until this
+        existed the stage fell back to DEFAULT_PROFILE_KEY whenever nobody
+        typed a carrier, which meant a Northwind invoice sent without a word
+        paid for a whole extraction under Brazilian separator hints before
+        ExtractorAgent._carrier_mismatch refused it — the right answer, reached
+        the expensive way, and reached at all only because that check exists.
+        Reading the printed name turns the assumption into a look, and it costs
+        a regex over a text layer rather than a model call.
+
+        What the person typed still wins where the page is not evidence: a
+        scan has no text to read, and a bill that mentions two carriers this
+        build knows has named one it was not issued by. Neither contradicts
+        them, so their word stands and the printed carrier is checked again
+        after extraction, where the model has actually read the page.
+        """
+        printed = carriers_printed_in(pdf)
+
+        if len(printed) == 1:
+            found = printed.pop()
+            if asked_for is not None and asked_for != found:
+                return None, (
+                    f"Refusing to read this one. You named "
+                    f"{profile_for(asked_for).carrier_name}, but {pdf.label} "
+                    f"says it was issued by {profile_for(found).carrier_name}. "
+                    f"Reading a carrier's layout with another carrier's profile "
+                    f"produces figures that look right and are not, so I would "
+                    f"rather stop before spending an extraction on it."
+                )
+            return found, (
+                f"Reading {pdf.label} as a {profile_for(found).carrier_name} "
+                f"document — that is the carrier printed on it."
+            )
+
+        if asked_for is not None:
+            return asked_for, (
+                f"Reading {pdf.label} as a {profile_for(asked_for).carrier_name} "
+                f"document, as you named. I could not tell from the page itself, "
+                f"so I check the carrier again once it has been read."
+            )
+
+        if printed:
+            names = ", ".join(sorted(profile_for(k).carrier_name for k in printed))
+            return None, (
+                f"{pdf.label} names more than one carrier I have a profile for "
+                f"({names}), so I cannot tell which one issued it. Say which and "
+                f"send it again."
+            )
+
+        known = ", ".join(
+            sorted(profile.carrier_name for profile in PROFILES.values())
+        )
+        return None, (
+            f"I could not find a carrier name in {pdf.label} — a scanned PDF "
+            f"carries no text to read. Tell me who issued it and send it again "
+            f"({known}). I would rather ask than read it with the wrong layout, "
+            f"which produces figures that look right and are not."
+        )
 
     def _store_contract(
         self, attachment: PdfAttachment, profile: ExtractionProfile

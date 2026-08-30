@@ -11,5 +11,8 @@
 -r invoice_sentinel/requirements.txt
 
 reportlab==5.0.1   # renders the synthetic invoice PDFs
-pypdf==6.16.2       # reads generated PDFs back for verification
 pytest==9.1.1
+
+# pypdf is not listed here: it graduated to a runtime dependency when intake
+# started reading the carrier's name off page one, and pinning it twice is how
+# the two files drift apart.

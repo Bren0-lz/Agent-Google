@@ -215,6 +215,10 @@ def test_naming_the_wrong_carrier_is_refused(monkeypatch):
     out right only because the content hash hit an extraction made earlier under
     the correct profile; a PDF arriving for the first time would have been read
     with the American separator hints, which turn 1.234,56 into 1.234.
+
+    Now refused at intake, off the printed name, before the extraction is paid
+    for. The check inside the extractor stays where it is: it is the one that
+    still works on a scan, where there is no text layer to read the name from.
     """
     monkeypatch.setattr(
         extractor_agent, "extract_invoice", lambda source, profile, **kw: canonical_fixture()
@@ -226,7 +230,7 @@ def test_naming_the_wrong_carrier_is_refused(monkeypatch):
     )
 
     transcript = said(events)
-    assert "Refusing to audit this one" in transcript
+    assert "Refusing to read this one" in transcript
     # It names both carriers, so the person can see which one to correct.
     assert "Northwind Wireless" in transcript
     assert "Vantel Empresas" in transcript

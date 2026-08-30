@@ -19,7 +19,6 @@ from pathlib import Path
 import pytest
 from google.genai import types
 
-from invoice_sentinel import config
 from invoice_sentinel.intake import (
     IntakeAgent,
     PdfAttachment,
@@ -28,6 +27,7 @@ from invoice_sentinel.intake import (
     message_text,
     pdf_attachments,
     profile_key_in,
+    profile_keys_in,
     split_attachments,
 )
 from invoice_sentinel.profiles import NORTHWIND, VANTEL
@@ -35,6 +35,7 @@ from invoice_sentinel.schema import content_hash
 
 DATASET = Path(__file__).resolve().parent.parent / "data" / "synthetic"
 INVOICE_PDF = DATASET / "invoices" / "ACC-BR-1041-2026-07.pdf"
+US_INVOICE_PDF = DATASET / "invoices" / "ACC-US-77120-2026-07.pdf"
 
 
 # --- Message builders --------------------------------------------------------
@@ -201,31 +202,80 @@ def test_a_session_built_over_http_is_left_alone():
 
 def test_a_single_pdf_is_taken_as_the_invoice():
     agent = IntakeAgent(name="intake", persist=False)
+    content = message(pdf_part(INVOICE_PDF.read_bytes(), name="julho.pdf"))
 
-    events = run(agent, fake_ctx(message(pdf_part(name="julho.pdf"))))
+    events = run(agent, fake_ctx(content))
 
     delta = deltas(events)
     assert delta["invoice_attached"] is True
     assert delta["uploaded_name"] == "julho.pdf"
-    assert delta["profile_key"] == config.DEFAULT_PROFILE_KEY
 
 
-def test_assuming_a_carrier_is_announced_not_hidden():
+def test_the_carrier_is_read_off_the_bill_when_nobody_names_one():
+    """The whole point: a bill says who issued it, so do not assume.
+
+    Before this the stage fell back to DEFAULT_PROFILE_KEY, which is Brazilian.
+    An American invoice sent without a word was extracted under comma-decimal
+    hints and only refused afterwards, by which time the extraction was paid
+    for.
+    """
+    agent = IntakeAgent(name="intake", persist=False)
+    content = message(pdf_part(US_INVOICE_PDF.read_bytes(), name="july.pdf"))
+
+    events = run(agent, fake_ctx(content))
+
+    assert deltas(events)["profile_key"] == NORTHWIND.profile_key
+    assert "printed on it" in texts(events)
+
+
+def test_a_pdf_with_no_text_layer_is_a_question_not_a_default():
+    """A scan carries no name to read, and a default here is a guess."""
     agent = IntakeAgent(name="intake", persist=False)
 
-    events = run(agent, fake_ctx(message(pdf_part())))
+    events = run(agent, fake_ctx(message(pdf_part(name="digitalizada.pdf"))))
 
-    assert "did not name a carrier" in texts(events)
+    said = texts(events)
+    assert "could not find a carrier name" in said
+    assert "digitalizada.pdf" in said
+    for profile in (VANTEL, NORTHWIND):
+        assert profile.carrier_name in said
+    assert deltas(events) == {}
 
 
-def test_a_named_carrier_is_honoured_and_not_announced():
+def test_a_named_carrier_stands_when_the_page_cannot_be_read():
+    """Unreadable is not evidence against the person; the extractor re-checks."""
     agent = IntakeAgent(name="intake", persist=False)
     content = message(types.Part(text="northwind wireless"), pdf_part())
 
     events = run(agent, fake_ctx(content))
 
     assert deltas(events)["profile_key"] == NORTHWIND.profile_key
-    assert "did not name a carrier" not in texts(events)
+    assert "as you named" in texts(events)
+
+
+def test_the_printed_carrier_beats_a_wrong_one_before_any_extraction():
+    """'northwind' typed over a Vantel bill, caught at the door."""
+    agent = IntakeAgent(name="intake", persist=False)
+    content = message(
+        types.Part(text="northwind"), pdf_part(INVOICE_PDF.read_bytes(), "fatura.pdf")
+    )
+
+    events = run(agent, fake_ctx(content))
+
+    said = texts(events)
+    assert "Refusing to read this one" in said
+    assert "Northwind Wireless" in said and "Vantel Empresas" in said
+    # Nothing reaches state, so the extractor never sees the attachment.
+    assert deltas(events) == {}
+
+
+def test_naming_two_carriers_names_none():
+    """A sentence holding both is a contradiction to resolve, not a coin toss."""
+    assert profile_key_in("vantel or northwind, not sure") is None
+    assert profile_keys_in("vantel or northwind, not sure") == {
+        VANTEL.profile_key,
+        NORTHWIND.profile_key,
+    }
 
 
 def test_two_unlabelled_pdfs_are_a_question_not_a_guess():

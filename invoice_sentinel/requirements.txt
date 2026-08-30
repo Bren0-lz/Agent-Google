@@ -17,6 +17,14 @@ pydantic==2.13.4
 google-cloud-storage==3.13.1
 google-cloud-firestore==2.29.0
 
+# Reads the text layer of page one so intake can pick the carrier profile off
+# the bill's own letterhead instead of assuming a default. Runtime, not tooling:
+# the alternative is a model call to answer a question a regex settles, and the
+# assumption it replaces cost a full extraction under the wrong separator hints
+# every time somebody attached a bill without naming its carrier. Pure Python,
+# ~0.15 s to import, paid once per instance and the service runs min-instances 1.
+pypdf==6.16.2
+
 # Required by `adk deploy --trace_to_cloud`, which deploy.ps1 passes so the
 # agent graph and its traces show up in Cloud Trace. Without it the container
 # builds fine and then exits on startup with ModuleNotFoundError, which Cloud

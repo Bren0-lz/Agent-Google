@@ -10,6 +10,7 @@ State contract, so the SequentialAgent assembled on Day 2 has something stable
 to build against:
 
     in    source_uri      file:// or gs:// location of the invoice PDF
+    in    invoice_attached  intake approved the PDF on this message
     in    (attachment)    a PDF on the message itself, when no source_uri is set
     in    profile_key     carrier profile; defaults to config.DEFAULT_PROFILE_KEY
     out   canonical_invoice   the CanonicalInvoice, as JSON-safe dict
@@ -154,10 +155,20 @@ class ExtractorAgent(BaseAgent):
         Otherwise the PDF came in on the conversation. The bytes are read from
         the message rather than from state on purpose: state deltas are
         serialised to JSON on the way out of /run, and bytes do not survive it.
+        Which does not make the attachment self-authorising: `invoice_attached`
+        is intake's verdict on that same message, and reading around it would
+        undo every refusal intake makes — a bill whose printed carrier
+        contradicts the one named is turned away there precisely so nobody pays
+        for the extraction, and this stage cannot see the attachment without
+        also seeing that it was rejected. Sibling stages of a SequentialAgent
+        cannot be skipped from outside, so each one asks.
         """
         location = state.get("source_uri")
         if location:
             return InvoiceSource.resolve(location)
+
+        if not state.get("invoice_attached"):
+            return None
 
         _contracts, invoices = split_attachments(ctx.user_content)
         if not invoices:
