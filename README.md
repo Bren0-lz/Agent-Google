@@ -100,7 +100,7 @@ runs at most once per account: `contract_extractor` transcribes a signed contrac
 somebody sends one.)
 
 Ahead of all of it sits `intake`, which is deliberately **not** an `LlmAgent`. Deciding whether
-an attachment is a contract or a bill, and which carrier was named, is pattern matching — a model
+an attachment is a contract or a bill, and which carrier issued it, is pattern matching — a model
 call whose only job is to route would be tokens spent on nothing, the same reasoning that keeps
 the rule families deterministic.
 
@@ -338,10 +338,23 @@ sizing findings light up on their own.
 >
 > The refusal is checked against the document, not against the request. Naming a carrier
 > the bill was not issued by — typing `northwind` over a Vantel invoice — is refused for
-> the same reason, by comparing the carrier the extractor read on the page against the
-> profile it was asked to read with. Naming the wrong one used to be accepted silently,
-> which is the failure mode `profile_for()` was written to prevent, arriving through the
-> door nobody had locked.
+> the same reason, by comparing the carrier printed on the page against the profile it was
+> asked to read with. Naming the wrong one used to be accepted silently, which is the
+> failure mode `profile_for()` was written to prevent, arriving through the door nobody had
+> locked.
+>
+> **You do not have to name one.** `intake` reads the text layer of page one and picks the
+> profile off the letterhead — deterministically, with a regex and no model call, since the
+> issuer's name is printed where a bill starts by definition. It gets all 16 documents in
+> and around this repository right, and it is what turns naming a carrier from an
+> instruction into an exception.
+>
+> The exception matters, because reading the page is not always possible. A scan carries no
+> text layer, and there the agent **asks** rather than falling back to a default: assuming
+> the Brazilian profile for an American bill is exactly the plausible-and-wrong reading the
+> refusals exist to prevent, and it used to cost a full extraction before anything noticed.
+> Your answer then stands until the model has actually read the page, where the carrier is
+> checked once more.
 
 ### Driving the deployed API directly
 
@@ -405,8 +418,9 @@ tests/                        161 tests, all offline
 Two layout decisions that are load-bearing:
 
 - **`invoice_sentinel/requirements.txt` holds runtime dependencies only.** Every extra package in
-  the image is cold-start latency. ReportLab, pypdf and pytest live in the root
-  `requirements-dev.txt`.
+  the image is cold-start latency. ReportLab and pytest live in the root
+  `requirements-dev.txt`. pypdf was one of them until intake started reading the carrier's name
+  off page one, which is the bar for crossing over: it replaced a model call, not a convenience.
 - **Nothing in `scripts/` may be imported by `invoice_sentinel/`.** That folder does not exist
   inside the container. It is why the carrier profiles live in the package rather than next to the
   dataset generator that also uses them.
